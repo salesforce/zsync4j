@@ -8,19 +8,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.TimeZone;
 import java.util.concurrent.Callable;
-
-import javax.xml.bind.DatatypeConverter;
 
 import com.salesforce.zsync4j.md4.MD4Provider;
 
@@ -40,6 +42,7 @@ public class ZsyncMake implements Callable<Void> {
   // currently not configurable as these are fixed for zsync
   private final MessageDigest fileDigest;
   private final MessageDigest blockDigest;
+  private final DateFormat mtimeFormat;
 
   private ZsyncMake(Path inputFile, Path outputFile, String filename, URI url, int blocksize) {
     this.inputFile = inputFile;
@@ -49,11 +52,13 @@ public class ZsyncMake implements Callable<Void> {
     this.blocksize = blocksize;
 
     try {
-      blockDigest = MessageDigest.getInstance("MD4", new MD4Provider());
-      fileDigest = MessageDigest.getInstance("SHA-1");
+      this.blockDigest = MessageDigest.getInstance("MD4", new MD4Provider());
+      this.fileDigest = MessageDigest.getInstance("SHA-1");
     } catch (NoSuchAlgorithmException e) {
       throw new RuntimeException("Failed to construct ZsyncMake because required digest unavailable", e);
     }
+    this.mtimeFormat = new SimpleDateFormat("EEE, dd MMMMM yyyy HH:mm:ss Z");
+    this.mtimeFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
   }
 
   /**
@@ -121,6 +126,7 @@ public class ZsyncMake implements Callable<Void> {
       // first write header
       writeHeader(fc, "zsync", "0.6.2");
       writeHeader(fc, "Filename", filename);
+      writeHeader(fc, "MTime", getMtime());
       writeHeader(fc, "Blocksize", String.valueOf(blocksize));
       writeHeader(fc, "Length", String.valueOf(fileLength));
       writeHeader(fc, "Hash-Lengths", sequenceMatches + "," + weakChecksumLength + "," + strongChecksumLength);
@@ -136,6 +142,12 @@ public class ZsyncMake implements Callable<Void> {
     return null;
   }
 
+  // convenience for common usage pattern
+  public Path make() throws IOException {
+    call();
+    return outputFile;
+  }
+
   private void writeHeader(FileChannel fc, String name, String value) throws IOException {
     final String header = new StringBuilder(name.length() + value.length() + 3).append(name).append(": ").append(value).append('\n').toString();
     writeHeader(fc, header);
@@ -143,6 +155,11 @@ public class ZsyncMake implements Callable<Void> {
 
   private void writeHeader(FileChannel fc, String header) throws IOException {
     fc.write(ByteBuffer.wrap(header.getBytes(US_ASCII)));
+  }
+
+  private String getMtime() throws IOException {
+    final long mtime = Files.readAttributes(inputFile, BasicFileAttributes.class).lastModifiedTime().toMillis();
+    return mtimeFormat.format(new Date(mtime));
   }
 
   /**
@@ -365,7 +382,7 @@ public class ZsyncMake implements Callable<Void> {
       return this;
     }
 
-    ZsyncMake build() throws IOException {
+    public ZsyncMake build() throws IOException {
       // validate and default inputs
       if (!Files.exists(inputFile))
         throw new IllegalArgumentException("input file " + inputFile + " does not exist");
