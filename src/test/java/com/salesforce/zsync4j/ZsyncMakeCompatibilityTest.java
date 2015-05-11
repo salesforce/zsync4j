@@ -25,7 +25,7 @@ public class ZsyncMakeCompatibilityTest {
   public void test() throws IOException {
     final Path inputFile = createTempInputFile(name);
     final Path expected = createTempInputFile(name + ".zsync");
-    final Path actual = new ZsyncMake.Builder(inputFile).setFilename(name).build().make();
+    final Path actual = new ZsyncMake.Builder(inputFile).setFilename(name).build().call();
     try {
       assertArrayEquals("Generated zsync file does not match expected file", readWithoutMTime(expected), readWithoutMTime(actual));
     } finally {

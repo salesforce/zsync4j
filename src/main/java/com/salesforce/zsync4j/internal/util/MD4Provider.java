@@ -1,4 +1,4 @@
-package com.salesforce.zsync4j.md4;
+package com.salesforce.zsync4j.internal.util;
 
 import java.security.Provider;
 

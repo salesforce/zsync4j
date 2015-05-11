@@ -24,14 +24,16 @@ import java.util.Date;
 import java.util.TimeZone;
 import java.util.concurrent.Callable;
 
-import com.salesforce.zsync4j.md4.MD4Provider;
+import com.salesforce.zsync4j.internal.util.MD4Provider;
 
 /**
  * Constructs a zsync file for a given input file. Construct via {@link ZsyncMakeTest.Builder}.
  * 
  * @author bbusjaeger
  */
-public class ZsyncMake implements Callable<Void> {
+public class ZsyncMake implements Callable<Path> {
+
+  public static final String VERSION = "0.6.2";
 
   private final Path inputFile;
   private final Path outputFile;
@@ -106,7 +108,7 @@ public class ZsyncMake implements Callable<Void> {
     return blocksize;
   }
 
-  public Void call() throws IOException {
+  public Path call() throws IOException {
     final long fileLength = Files.size(inputFile);
     final int sequenceMatches = fileLength > blocksize ? 2 : 1;
     final int weakChecksumLength = weakChecksumLength(fileLength, blocksize, sequenceMatches);
@@ -124,7 +126,7 @@ public class ZsyncMake implements Callable<Void> {
 
     try (FileChannel fc = FileChannel.open(outputFile, CREATE, WRITE)) {
       // first write header
-      writeHeader(fc, "zsync", "0.6.2");
+      writeHeader(fc, "zsync", VERSION);
       writeHeader(fc, "Filename", filename);
       writeHeader(fc, "MTime", getMtime());
       writeHeader(fc, "Blocksize", String.valueOf(blocksize));
@@ -139,12 +141,6 @@ public class ZsyncMake implements Callable<Void> {
       } while (checksums.hasRemaining());
     }
 
-    return null;
-  }
-
-  // convenience for common usage pattern
-  public Path make() throws IOException {
-    call();
     return outputFile;
   }
 
