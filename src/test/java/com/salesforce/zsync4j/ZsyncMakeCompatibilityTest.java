@@ -12,6 +12,8 @@ import java.nio.file.Path;
 
 import org.junit.Test;
 
+import com.salesforce.zsync4j.ZsyncMake.Options;
+
 /**
  * Exercises {@link ZsyncMake} against zsync files generated with official zsync version 0.6.2
  *
@@ -25,7 +27,7 @@ public class ZsyncMakeCompatibilityTest {
   public void test() throws IOException {
     final Path inputFile = createTempInputFile(name);
     final Path expected = createTempInputFile(name + ".zsync");
-    final Path actual = new ZsyncMake.Builder(inputFile).setFilename(name).build().call();
+    final Path actual = new ZsyncMake().writeToFile(inputFile, new Options().setFilename(name)).getOutputFile();
     try {
       assertArrayEquals("Generated zsync file does not match expected file", readWithoutMTime(expected), readWithoutMTime(actual));
     } finally {
