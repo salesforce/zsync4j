@@ -5,6 +5,24 @@
   <artifactId>zsync4j</artifactId>
   <version>0.0.1-SNAPSHOT</version>
 
+  <scm>
+    <connection>scm:git:git@git.soma.salesforce.com:modularization-team/zsync4j</connection>
+    <developerConnection>scm:git:git@git.soma.salesforce.com:modularization-team/zsync4j.git</developerConnection>
+    <url>https://git.soma.salesforce.com/modularization-team/zsync4j</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <distributionManagement>
+    <repository>
+      <id>nexus</id>
+      <url>https://nexus.soma.salesforce.com/nexus/content/repositories/releases/</url>
+    </repository>
+    <snapshotRepository>
+      <id>nexus</id>
+      <url>https://nexus.soma.salesforce.com/nexus/content/repositories/snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <dependencies>
     <dependency>
       <groupId>junit</groupId>
