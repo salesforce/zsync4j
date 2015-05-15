@@ -154,7 +154,7 @@ public class MD4 extends MessageDigestSpi {
      * {@inheritDoc}
      */
     protected int engineDigest(byte[] buf, int offset, int len) throws DigestException {
-        if (offset < 0 || offset + len >= buf.length) {
+        if (offset < 0 || offset + len > buf.length) {
             throw new DigestException("Wrong offset or not enough space to store the digest");
         }
         int destLength = Math.min(len, BYTE_DIGEST_LENGTH);

@@ -10,8 +10,10 @@ public class ZsyncMakeTest {
   @Test
   public void testWeakChecksumLength() {
     assertEquals(2, ZsyncMake.weakChecksumLength(1024, 2048, 2));
-    assertEquals(3, ZsyncMake.weakChecksumLength(500 * 1024 * 1024, 4096, 2));
-    assertEquals(4, ZsyncMake.weakChecksumLength(100 * 1024 * 1024, 4096, 1));
+    // tests boundary between 2 and 3 bits at 4096 block size and 2 seq matches (~389MB)
+    assertEquals(3, ZsyncMake.weakChecksumLength(389 * 1024 * 1024, 4096, 2));
+    // tests boundary between 3 and 4 bits at 4096 block size and 2 seq matches (~25TB)
+    assertEquals(4, ZsyncMake.weakChecksumLength(25l * 1024 * 1024 * 1024 * 1024, 4096, 2));
   }
 
   @Test

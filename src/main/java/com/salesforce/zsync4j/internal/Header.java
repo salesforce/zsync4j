@@ -22,7 +22,7 @@ public class Header {
     // defaults for older versions of zsync
     int checksumBytes = 16;
     int rsumBytes = 4;
-    int seqMatches = 1;
+    boolean seqMatches = false;
     String url = null;
     String sha1 = null;
 
@@ -36,18 +36,18 @@ public class Header {
       }
       final int index = line.indexOf(':');
       if (index == -1 || index == 0 || index >= line.length() - 2 || line.charAt(index + 1) != ' ')
-        throw new IOException("Invalid header line: " + line);
+        throw new IllegalArgumentException("Invalid header line: " + line);
       final String name = line.substring(0, index);
       final String value = line.substring(index + 2);
 
       // zsync doesn't check for duplicate headers
       if ("zsync".equals(name)) {
         if ("0.0.4".equals(value))
-          throw new IOException("Incompatible zsync version " + value);
+          throw new IllegalArgumentException("Incompatible zsync version " + value);
         version = value;
       } else if ("Min-Version".equals(name)) {
         if (value.compareTo(VERSION) > 0)
-          throw new IOException("Zsync version " + VERSION + " does not satisfy min-version requirement " + value);
+          throw new IllegalArgumentException("Zsync version " + VERSION + " does not satisfy min-version requirement " + value);
       } else if ("Length".equals(name)) {
         try {
           length = Long.parseLong(value);
@@ -73,16 +73,17 @@ public class Header {
           final String[] split = value.split(",");
           if (split.length != 3)
             throw new NumberFormatException();
-          seqMatches = Integer.parseInt(split[0]);
+          final int sm = Integer.parseInt(split[0]);
+          seqMatches = sm == 2;
           rsumBytes = Integer.parseInt(split[1]);
           checksumBytes = Integer.parseInt(split[2]);
-          if (seqMatches > 2 || seqMatches < 1 || rsumBytes < 1 || rsumBytes > 4 || checksumBytes < 3 || checksumBytes > 16)
+          if (sm > 2 || sm < 1 || rsumBytes < 1 || rsumBytes > 4 || checksumBytes < 3 || checksumBytes > 16)
             throw new NumberFormatException();
         } catch (NumberFormatException e) {
           throwInvalidHeaderValue(name, value);
         }
       } else if ("SHA-1".equals(name)) {
-        if (name.length() != 40)
+        if (value.length() != 40)
           throwInvalidHeaderValue(name, value);
         sha1 = value;
       } else if ("MTime".equals(name)) {
@@ -92,12 +93,12 @@ public class Header {
           throwInvalidHeaderValue(name, value);
         }
       } else {
-        throw new IOException("Unsupported header " + line);
+        throw new IllegalArgumentException("Unsupported header " + line);
       }
     }
 
     if (!terminated)
-      throw new IOException("Invalid header: terminating line feed missing.");
+      throw new IllegalArgumentException("Invalid header: terminating line feed missing.");
     if (filename == null)
       throwMissingHeader("Filename");
     if (blocksize == null)
@@ -111,12 +112,12 @@ public class Header {
     return new Header(version, filename, mtime, blocksize, length, checksumBytes, rsumBytes, seqMatches, url, sha1);
   }
 
-  private static void throwInvalidHeaderValue(String name, String value) throws IOException {
-    throw new IOException("Invalid " + name + " header value '" + value + "'");
+  private static void throwInvalidHeaderValue(String name, String value) {
+    throw new IllegalArgumentException("Invalid " + name + " header value '" + value + "'");
   }
 
-  private static void throwMissingHeader(String name) throws IOException {
-    throw new IOException("Missing header " + name);
+  private static void throwMissingHeader(String name) {
+    throw new IllegalArgumentException("Missing header " + name);
   }
 
   private final String version;
@@ -126,11 +127,11 @@ public class Header {
   private final long length;
   private final int checksumBytes;
   private final int rsumBytes;
-  private final int seqMatches;
+  private final boolean seqMatches;
   private final String url;
   private final String sha1;
 
-  public Header(String version, String filename, Date mtime, int blocksize, long length, int checksumBytes, int rsumBytes, int seqMatches, String url, String sha1) {
+  public Header(String version, String filename, Date mtime, int blocksize, long length, int checksumBytes, int rsumBytes, boolean seqMatches, String url, String sha1) {
     this.version = version;
     this.filename = filename;
     this.mtime = mtime;
@@ -171,7 +172,7 @@ public class Header {
     return rsumBytes;
   }
 
-  public int getSeqMatches() {
+  public boolean isSeqMatches() {
     return seqMatches;
   }
 

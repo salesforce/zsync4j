@@ -46,8 +46,9 @@ public class SplitInputStream extends InputStream {
     for (int i = off; i < off + read; i++) {
       if (delimiter[pos] == b[i]) {
         if (++pos == delimiter.length) {
-          prefix = new ByteArrayInputStream(b, i, read - (i - pos));
-          return i;
+          final int r = i - off + 1;
+          prefix = new ByteArrayInputStream(b, i + 1, read - r);
+          return r;
         }
       } else {
         pos = 0;

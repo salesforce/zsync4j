@@ -17,13 +17,12 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.TimeZone;
 
-import com.salesforce.zsync4j.internal.util.MD4Provider;
+import com.salesforce.zsync4j.internal.util.ZsyncUtil;
 
 /**
  * Constructs a zsync file for a given input file. Construct via {@link ZsyncMakeTest.Builder}.
@@ -31,23 +30,24 @@ import com.salesforce.zsync4j.internal.util.MD4Provider;
  * @author bbusjaeger
  */
 public class ZsyncMake {
-	
+
   public static String ZSYNC_VERSION = "0.6.2";
 
   private static final int BLOCK_SIZE_SMALL = 2048;
   private static final int BLOCK_SIZE_LARGE = 4096;
-  private static final char[] HEX_CODE = "0123456789abcdef".toCharArray();
-  
-  @SuppressWarnings("serial") 
-  private static final SimpleDateFormat LAST_MODIFIED_TIME_FORMAT = 
-      new SimpleDateFormat("EEE, dd MMMMM yyyy HH:mm:ss Z"){{ setTimeZone(TimeZone.getTimeZone("GMT")); }};
-  
-  public ZsyncMake() {
-  }
-  
+
+  @SuppressWarnings("serial")
+  private static final SimpleDateFormat LAST_MODIFIED_TIME_FORMAT = new SimpleDateFormat("EEE, dd MMMMM yyyy HH:mm:ss Z") {
+    {
+      setTimeZone(TimeZone.getTimeZone("GMT"));
+    }
+  };
+
+  public ZsyncMake() {}
+
   /**
-   * Writes zsync control data for the specified input file to the supplied output stream. The output stream is not 
-   * closed.
+   * Writes zsync control data for the specified input file to the supplied output stream. The
+   * output stream is not closed.
    * 
    * @param outputStream The stream to which zsync control data will be written.
    * @param inputFile Specifies the file for which the control data will be calculated.
@@ -56,10 +56,10 @@ public class ZsyncMake {
   public Result writeToStream(Path inputFile, OutputStream outputStream) {
     return this.writeToStream(inputFile, outputStream, new Options());
   }
-  
+
   /**
-   * Writes zsync control data for the specified input file to the supplied output stream using the supplied {@link
-   * Options}. The output stream is not closed.
+   * Writes zsync control data for the specified input file to the supplied output stream using the
+   * supplied {@link Options}. The output stream is not closed.
    * 
    * @param outputStream The stream to which zsync control data will be written.
    * @param inputFile Specifies the file for which the control data will be calculated.
@@ -72,42 +72,43 @@ public class ZsyncMake {
     }
     return writeToChannel(inputFile, Channels.newChannel(outputStream), options);
   }
-  
+
   /**
-   * Writes zsync control data for the specified input file to another file. The generated .zsync file is in the same
-   * directory as the input file and is named the same as the input file but with ".zsync" on the end.
+   * Writes zsync control data for the specified input file to another file. The generated .zsync
+   * file is in the same directory as the input file and is named the same as the input file but
+   * with ".zsync" on the end.
    * 
    * @param inputFile Specifies the file for which the corresponding .zsync file will be written.
-   * @return The {@link FileResult results} of the zsyncmake operation. The resulting .zsync file can be accessed via
-   *         {@link FileResult#getOutputFile() results.getOutputFile()}.
+   * @return The {@link FileResult results} of the zsyncmake operation. The resulting .zsync file
+   *         can be accessed via {@link FileResult#getOutputFile() results.getOutputFile()}.
    */
   public FileResult writeToFile(Path inputFile) {
     return this.writeToFile(inputFile, new Options());
   }
-  
+
   /**
-   * Writes zsync control data for the specified input file to the specified output file. The filename of the output 
-   * file must end with .zsync.
+   * Writes zsync control data for the specified input file to the specified output file. The
+   * filename of the output file must end with .zsync.
    * 
-   * @param outputFile Specifies the file where the zsync control data will be written. If the file already exists it 
-   *                   will be overwritten.
+   * @param outputFile Specifies the file where the zsync control data will be written. If the file
+   *        already exists it will be overwritten.
    * @param inputFile Specifies the file for which the corresponding .zsync file will be written.
-   * @return The {@link FileResult results} of the zsyncmake operation. The resulting .zsync file can be accessed via
-   *         {@link FileResult#getOutputFile() results.getOutputFile()}.
+   * @return The {@link FileResult results} of the zsyncmake operation. The resulting .zsync file
+   *         can be accessed via {@link FileResult#getOutputFile() results.getOutputFile()}.
    */
   public FileResult writeToFile(Path inputFile, Path outputFile) {
     return this.writeToFile(inputFile, outputFile, new Options());
   }
-  
+
   /**
-   * Writes zsync control data for the specified input file to another file using the supplied {@link Options}. The 
-   * generated .zsync file is in the same directory as the input file and is named the same as the input file but with 
-   * ".zsync" on the end.
+   * Writes zsync control data for the specified input file to another file using the supplied
+   * {@link Options}. The generated .zsync file is in the same directory as the input file and is
+   * named the same as the input file but with ".zsync" on the end.
    * 
    * @param inputFile Specifies the file for which the corresponding .zsync file will be written.
    * @param options Advanced options for the zsyncmake operation.
-   * @return The {@link FileResult results} of the zsyncmake operation. The resulting .zsync file can be accessed via
-   *         {@link FileResult#getOutputFile() results.getOutputFile()}.
+   * @return The {@link FileResult results} of the zsyncmake operation. The resulting .zsync file
+   *         can be accessed via {@link FileResult#getOutputFile() results.getOutputFile()}.
    */
   public FileResult writeToFile(Path inputFile, Options options) {
     if (inputFile == null) {
@@ -115,25 +116,24 @@ public class ZsyncMake {
     }
     return writeToFile(inputFile, inputFile.getParent().resolve(inputFile.getFileName() + ".zsync"), options);
   }
-  
+
   /**
-   * Writes zsync control data for the specified input file to the specified output file using the supplied {@link
-   * Options}. The filename of the output file must end with .zsync. 
+   * Writes zsync control data for the specified input file to the specified output file using the
+   * supplied {@link Options}. The filename of the output file must end with .zsync.
    * 
-   * @param outputFile Specifies the file where the zsync control data will be written. If the file already exists it 
-   *                   will be overwritten.
+   * @param outputFile Specifies the file where the zsync control data will be written. If the file
+   *        already exists it will be overwritten.
    * @param inputFile Specifies the file for which the corresponding .zsync file will be written.
    * @param options Advanced options for the zsyncmake operation.
-   * @return The {@link FileResult results} of the zsyncmake operation. The resulting .zsync file can be accessed via
-   *         {@link FileResult#getOutputFile() results.getOutputFile()}.
+   * @return The {@link FileResult results} of the zsyncmake operation. The resulting .zsync file
+   *         can be accessed via {@link FileResult#getOutputFile() results.getOutputFile()}.
    */
   public FileResult writeToFile(Path inputFile, Path outputFile, Options options) {
     if (outputFile == null) {
       throw new IllegalArgumentException("outputFile cannot be null");
     }
     if (!outputFile.getFileName().toString().endsWith(".zsync")) {
-      throw new IllegalArgumentException("outputFile's filename must end with .zsync: " + 
-          outputFile.getFileName().toString());
+      throw new IllegalArgumentException("outputFile's filename must end with .zsync: " + outputFile.getFileName().toString());
     }
     try (FileOutputStream outputStream = new FileOutputStream(outputFile.toFile())) {
       Result result = this.writeToStream(inputFile, outputStream, options);
@@ -142,7 +142,7 @@ public class ZsyncMake {
       throw new RuntimeException("zsyncmake operation failed", exception);
     }
   }
-  
+
   /*
    * Everything funnels into here.
    */
@@ -161,37 +161,30 @@ public class ZsyncMake {
       options = new Options();
     }
 
-    final MessageDigest fileDigest;
-    final MessageDigest blockDigest;
-    
-    try {
-      blockDigest = MessageDigest.getInstance("MD4", new MD4Provider());
-      fileDigest = MessageDigest.getInstance("SHA-1");
-    } catch (NoSuchAlgorithmException e) {
-      throw new RuntimeException("Failed to construct ZsyncMake because required digest unavailable", e);
-    }
-    
-    // We don't want to modify the Options object that was passed in, so we create a copy. We then populate any missing
+    final MessageDigest fileDigest = ZsyncUtil.newSHA1();
+    final MessageDigest blockDigest = ZsyncUtil.newMD4();
+
+    // We don't want to modify the Options object that was passed in, so we create a copy. We then
+    // populate any missing
     // values using the supplied input file.
     options = new Options(options).calculateMissingValues(inputFile);
-    
+
     final int blockSize = options.getBlockSize();
     final long fileLength = getFileSizeInBytes(inputFile);
     final int sequenceMatches = fileLength > options.getBlockSize() ? 2 : 1;
     final int weakChecksumLength = weakChecksumLength(fileLength, blockSize, sequenceMatches);
     final int strongChecksumLength = strongChecksumLength(fileLength, blockSize, sequenceMatches);
 
-    final ByteBuffer checksums = computeChecksums(inputFile, blockSize, fileLength, weakChecksumLength, 
-        strongChecksumLength, fileDigest, blockDigest);
+    final ByteBuffer checksums = computeChecksums(inputFile, blockSize, fileLength, weakChecksumLength, strongChecksumLength, fileDigest, blockDigest);
 
     // first read sha1 from end of buffer
     final int pos = checksums.capacity() - fileDigest.getDigestLength();
     checksums.position(pos);
-    final String sha1 = toHexString(checksums);
+    final String sha1 = ZsyncUtil.toHexString(checksums);
 
     // set buffer to read from beginning to start of fileDigest
-    checksums.clear().limit(pos);    
-    
+    checksums.clear().limit(pos);
+
     // first write headers
     writeHeader(out, "zsync", ZSYNC_VERSION);
     writeHeader(out, "Filename", options.getFilename());
@@ -210,7 +203,7 @@ public class ZsyncMake {
     } catch (IOException exception) {
       throw new RuntimeException("Failed to write checksums", exception);
     }
-    
+
     return new Result(sha1);
   }
 
@@ -239,8 +232,7 @@ public class ZsyncMake {
    *         reading: position at 0 and limit at capacity.
    * @throws IOException
    */
-  private ByteBuffer computeChecksums(final Path inputFile, final int blockSize, final long fileLength, 
-      final int weakLen, final int strongLen, MessageDigest fileDigest, MessageDigest blockDigest) {
+  private ByteBuffer computeChecksums(final Path inputFile, final int blockSize, final long fileLength, final int weakLen, final int strongLen, MessageDigest fileDigest, MessageDigest blockDigest) {
     if (weakLen < 1 || weakLen > 4) {
       throw new IllegalArgumentException("weak checksum length must be in interval [1, 4]");
     }
@@ -249,8 +241,7 @@ public class ZsyncMake {
     }
 
     // capacity of buffer is number of blocks times checksum bytes per block
-    final int capacity = ((int) (fileLength / blockSize) + (fileLength % blockSize > 0 ? 1 : 0)) * 
-        (weakLen + strongLen) + fileDigest.getDigestLength();
+    final int capacity = ((int) (fileLength / blockSize) + (fileLength % blockSize > 0 ? 1 : 0)) * (weakLen + strongLen) + fileDigest.getDigestLength();
 
     // output buffer: may want to write to disk at certain size
     final ByteBuffer checksums = ByteBuffer.allocate(capacity);
@@ -272,7 +263,7 @@ public class ZsyncMake {
 
           // write trailing bytes of weak checksum
           weakBytes.clear();
-          weakBytes.putInt(weakChecksum(block));
+          weakBytes.putInt(ZsyncUtil.computeRsum(block));
           weakBytes.position(weakBytes.limit() - weakLen);
           checksums.put(weakBytes);
 
@@ -283,7 +274,7 @@ public class ZsyncMake {
         }
       }
     } catch (IOException exception) {
-    	throw new RuntimeException("Failed calculating zsync checksum", exception);
+      throw new RuntimeException("Failed calculating zsync checksum", exception);
     }
 
     // finally add file checksum
@@ -295,36 +286,37 @@ public class ZsyncMake {
 
     return checksums;
   }
-  
+
   /**
    * Used to supply advanced options to the zsyncmake operation.
    * <p>
    * Usage:
+   * 
    * <pre>
    * Options options = new Options();
    * options.setBlockSize(desiredBlockSize);
-   * options.setFilename("thefile.dat");
+   * options.setFilename(&quot;thefile.dat&quot;);
    * Path outputFile = new ZsyncMake().writeToFile(inputFile, options).getOutputFile();
    * </pre>
    */
   public static class Options {
-  
+
     private Integer blockSize;
     private String filename;
     private String url;
-    
-    public Options() { }
-  
+
+    public Options() {}
+
     public Options(Options other) {
       this.blockSize = other.getBlockSize();
       this.filename = other.getFilename();
       this.url = other.getUrl();
     }
-  
+
     public Integer getBlockSize() {
       return this.blockSize;
     }
-  
+
     public Options setBlockSize(Integer blockSize) {
       if (blockSize != null && blockSize < 0) {
         throw new IllegalArgumentException("blockSize must be greater than zero: " + blockSize);
@@ -335,20 +327,20 @@ public class ZsyncMake {
       this.blockSize = blockSize;
       return this;
     }
-  
+
     public String getFilename() {
       return this.filename;
     }
-  
-   public Options setFilename(String filename) {
-     this.filename = filename;
-     return this;
-   }
-  
+
+    public Options setFilename(String filename) {
+      this.filename = filename;
+      return this;
+    }
+
     public String getUrl() {
       return this.url;
     }
-  
+
     public Options setUrl(String url) {
       if (url != null) {
         try {
@@ -360,9 +352,10 @@ public class ZsyncMake {
       this.url = url;
       return this;
     }
-   
+
     /**
-     * Resolves option values which are required for the zsyncmake operation but which were not supplied.
+     * Resolves option values which are required for the zsyncmake operation but which were not
+     * supplied.
      */
     private Options calculateMissingValues(Path inputFile) {
       // blocksize: default chosen based on file size (adopted from standard zsync implementation)
@@ -379,50 +372,52 @@ public class ZsyncMake {
       if (this.url == null) {
         this.setUrl(this.filename);
       }
-      
+
       return this;
     }
   }
-  
+
   /**
-   * The results of a zsyncmake operation. As part of the zsyncmake operation, a SHA-1 hash of the input file is 
-   * calculated and can be accessed via <code>result.getSha1()</code>.
+   * The results of a zsyncmake operation. As part of the zsyncmake operation, a SHA-1 hash of the
+   * input file is calculated and can be accessed via <code>result.getSha1()</code>.
    */
   public static class Result {
-  
+
     private final String sha1;
-  
+
     private Result(String sha1) {
       this.sha1 = sha1;
     }
-  
+
     public String getSha1() {
       return this.sha1;
     }
   }
-  
+
   /**
-   * The results of a <code>writeToFile(...)</code> zsyncmake operation. The <code>.zsync</code> file that was created 
-   * can be accessed via <code>results.getOutputFile()</code>.
+   * The results of a <code>writeToFile(...)</code> zsyncmake operation. The <code>.zsync</code>
+   * file that was created can be accessed via <code>results.getOutputFile()</code>.
    */
   public static class FileResult extends Result {
-  
+
     private final Path outputFile;
-  
+
     private FileResult(String sha1, Path outputFile) {
       super(sha1);
       this.outputFile = outputFile;
     }
-  
+
     public Path getOutputFile() {
       return this.outputFile;
     }
   }
 
   /**
-   * Creates a zsync control file for the specified input file in the same directory as the input file.
+   * Creates a zsync control file for the specified input file in the same directory as the input
+   * file.
    * <p>
    * Usage:
+   * 
    * <pre>
    * java -classpath &lt;path-to-zsync4j-jar&gt; com.salesforce.zsync4j.ZsyncMake &lt;path-to-input-file&gt;
    * </pre>
@@ -474,44 +469,18 @@ public class ZsyncMake {
     // enforce max and min values
     return l > 4 ? 4 : (l < 2 ? 2 : l);
   }
-  
-  private static String toHexString(ByteBuffer buffer) {
-    final StringBuilder r = new StringBuilder(buffer.remaining() * 2);
-    while (buffer.hasRemaining()) {
-      final byte b = buffer.get();
-      r.append(HEX_CODE[(b >> 4) & 0xF]);
-      r.append(HEX_CODE[(b & 0xF)]);
-    }
-    return r.toString();
-  }
 
-  private static int weakChecksum(byte[] block) {
-    short a = 0;
-    short b = 0;
-    for (int i = 0, l = block.length; i < block.length; i++, l--) {
-      final short val = unsigned(block[i]);
-      a += val;
-      b += l * val;
-    }
-    return (a << 16) | (b & 0xffff);
-  }
-
-  private static short unsigned(byte b) {
-    return (short) (b < 0 ? b & 0xFF : b);
-  }
-  
   private static int calculateDefaultBlockSizeForInputFile(Path inputFile) {
     try {
       return Files.size(inputFile) < 100 * 1 << 20 ? BLOCK_SIZE_SMALL : BLOCK_SIZE_LARGE;
     } catch (IOException exception) {
-      throw new RuntimeException("Error calculating the default block size for file: " + inputFile.getFileName(),
-          exception);
+      throw new RuntimeException("Error calculating the default block size for file: " + inputFile.getFileName(), exception);
     }
   }
-  
+
   /**
-   * Basically just wraps {@link Files#size(Path)} with some argument validation and exception handling. IOExceptions
-   * will be turned into runtime exceptions.
+   * Basically just wraps {@link Files#size(Path)} with some argument validation and exception
+   * handling. IOExceptions will be turned into runtime exceptions.
    */
   private static long getFileSizeInBytes(Path file) {
     try {
@@ -520,9 +489,10 @@ public class ZsyncMake {
       throw new RuntimeException("Failed to get file size for file: " + file.getFileName(), exception);
     }
   }
-  
+
   /**
-   * Returns the last modified time of the supplied file, formatted like "Sun, 03 May 2015 19:12:19 -0800".
+   * Returns the last modified time of the supplied file, formatted like
+   * "Sun, 03 May 2015 19:12:19 -0800".
    */
   private static String getFormattedLastModifiedTime(Path file) {
     try {

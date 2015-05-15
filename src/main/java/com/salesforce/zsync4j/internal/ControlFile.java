@@ -11,14 +11,14 @@ public class ControlFile {
   public static ControlFile read(final InputStream in) throws IOException {
     final SplitInputStream firstPart = new SplitInputStream(in, new byte[] {'\n', '\n'});
     final Header header = Header.read(firstPart);
-    final List<BlockSum> blockSums = BlockSum.read(in, header.getNumBlocks(), header.getRsumBytes(), header.getChecksumBytes());
+    final List<? extends BlockSum> blockSums = ImmutableBlockSum.readSums(firstPart.next(), header.getNumBlocks(), header.getRsumBytes(), header.getChecksumBytes());
     return new ControlFile(header, blockSums);
   }
 
   private final Header header;
-  private final List<BlockSum> blockSums;
+  private final List<? extends BlockSum> blockSums;
 
-  public ControlFile(Header header, List<BlockSum> blockSums) {
+  public ControlFile(Header header, List<? extends BlockSum> blockSums) {
     super();
     this.header = header;
     this.blockSums = blockSums;
@@ -28,7 +28,7 @@ public class ControlFile {
     return header;
   }
 
-  public List<BlockSum> getBlockSums() {
+  public List<? extends BlockSum> getBlockSums() {
     return blockSums;
   }
 
