@@ -3,13 +3,11 @@ package com.salesforce.zsync4j.internal.util;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
-import java.util.Arrays;
 
 import org.apache.mina.proxy.utils.MD4;
 

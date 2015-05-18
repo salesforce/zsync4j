@@ -9,8 +9,7 @@ import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
 
 class Checksum {
 
-  private final MessageDigest digest;
-  private final MessageDigestAdapter digestAdapter;
+  private final MessageDigestAdapter digest;
   private final int length;
 
   // mutable
@@ -18,12 +17,11 @@ class Checksum {
   private boolean set;
 
   Checksum(MessageDigest digest, int length) {
-    this(digest, new MessageDigestAdapter(digest), length, new byte[digest.getDigestLength()], false);
+    this(new MessageDigestAdapter(digest), length, new byte[digest.getDigestLength()], false);
   }
 
-  private Checksum(MessageDigest digest, MessageDigestAdapter digestAdapter, int length, byte[] bytes, boolean set) {
+  private Checksum(MessageDigestAdapter digest, int length, byte[] bytes, boolean set) {
     this.digest = digest;
-    this.digestAdapter = digestAdapter;
     this.length = length;
     this.bytes = bytes;
     this.set = set;
@@ -57,7 +55,7 @@ class Checksum {
   void setChecksum(ReadableByteBuffer buffer, int offset, int length) {
     digest.reset();
     try {
-      buffer.write(digestAdapter, offset, length);
+      buffer.write(digest, offset, length);
       digest.digest(bytes, 0, bytes.length);
     } catch (IOException | DigestException e) {
       throw new RuntimeException("Unexpected error during digest computation", e);

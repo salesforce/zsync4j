@@ -6,7 +6,6 @@ import static java.nio.file.StandardOpenOption.WRITE;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
@@ -17,8 +16,8 @@ import java.util.List;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
-import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
 import com.salesforce.zsync4j.internal.util.RangeFetcher.RangeReceiver;
+import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
 import com.salesforce.zsync4j.internal.util.ZsyncUtil;
 
 public class TargetFile implements RangeReceiver, Closeable {
@@ -115,16 +114,12 @@ public class TargetFile implements RangeReceiver, Closeable {
     if ((range.last + 1) % header.getBlocksize() != 0 && range.last + 1 != header.getLength())
       throw new RuntimeException("Invalid range received: last byte not block aligned");
 
-    // TODO use single buffer
-    final ByteBuffer b = ByteBuffer.allocate((int) range.size());
-    ReadableByteChannel c = Channels.newChannel(in);
-    while (b.hasRemaining())
-      if (c.read(b) == -1)
-        break;
-    b.flip();
-    channel.position(range.first);
-    while (b.hasRemaining())
-      channel.write(b);
+    final ReadableByteChannel src = Channels.newChannel(in);
+    final long size = range.size();
+    long remaining = size;
+    do {
+     remaining -= channel.transferFrom(src, range.first, size);
+    } while (remaining > 0);
 
     final int first = (int) (range.first / header.getBlocksize());
     final int last = (int) (range.last + 1 == header.getLength() ? written.length - 1 : (range.last + 1) / header.getBlocksize() - 1);

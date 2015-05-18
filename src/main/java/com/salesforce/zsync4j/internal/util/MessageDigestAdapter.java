@@ -3,6 +3,7 @@ package com.salesforce.zsync4j.internal.util;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
+import java.security.DigestException;
 import java.security.MessageDigest;
 
 /**
@@ -31,6 +32,14 @@ public class MessageDigestAdapter implements WritableByteChannel {
     final int r = src.remaining();
     digest.update(src);;
     return r;
+  }
+
+  public void reset() {
+    digest.reset();
+  }
+
+  public int digest(byte[] buf, int offset, int len) throws DigestException {
+    return digest.digest(buf, offset, len);
   }
 
 }
