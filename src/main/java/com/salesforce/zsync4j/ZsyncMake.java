@@ -1,5 +1,6 @@
 package com.salesforce.zsync4j;
 
+import static com.salesforce.zsync4j.internal.util.ZsyncUtil.getFileSize;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import java.io.FileOutputStream;
@@ -146,7 +147,7 @@ public class ZsyncMake {
   /*
    * Everything funnels into here.
    */
-  private Result writeToChannel(Path inputFile, WritableByteChannel out, Options options) {
+  public Result writeToChannel(Path inputFile, WritableByteChannel out, Options options) {
 
     if (inputFile == null) {
       throw new IllegalArgumentException("inputFile cannot be null");
@@ -170,7 +171,7 @@ public class ZsyncMake {
     options = new Options(options).calculateMissingValues(inputFile);
 
     final int blockSize = options.getBlockSize();
-    final long fileLength = getFileSizeInBytes(inputFile);
+    final long fileLength = getFileSize(inputFile);
     final int sequenceMatches = fileLength > options.getBlockSize() ? 2 : 1;
     final int weakChecksumLength = weakChecksumLength(fileLength, blockSize, sequenceMatches);
     final int strongChecksumLength = strongChecksumLength(fileLength, blockSize, sequenceMatches);
@@ -475,18 +476,6 @@ public class ZsyncMake {
       return Files.size(inputFile) < 100 * 1 << 20 ? BLOCK_SIZE_SMALL : BLOCK_SIZE_LARGE;
     } catch (IOException exception) {
       throw new RuntimeException("Error calculating the default block size for file: " + inputFile.getFileName(), exception);
-    }
-  }
-
-  /**
-   * Basically just wraps {@link Files#size(Path)} with some argument validation and exception
-   * handling. IOExceptions will be turned into runtime exceptions.
-   */
-  private static long getFileSizeInBytes(Path file) {
-    try {
-      return Files.size(file);
-    } catch (IOException exception) {
-      throw new RuntimeException("Failed to get file size for file: " + file.getFileName(), exception);
     }
   }
 

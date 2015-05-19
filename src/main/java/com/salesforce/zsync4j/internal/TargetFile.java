@@ -108,6 +108,14 @@ public class TargetFile implements RangeReceiver, Closeable {
     return b.build();
   }
 
+  public boolean isComplete() {
+    for (int i = 0; i < written.length; i++) {
+      if (!written[i])
+        return false;
+    }
+    return true;
+  }
+
   @Override
   public void receive(Range range, InputStream in) throws IOException {
     if (range.first % header.getBlocksize() != 0)

@@ -91,4 +91,17 @@ public class ZsyncUtil {
         // ignore
       }
   }
+
+  /**
+   * Basically just wraps {@link Files#size(Path)} with some argument validation and exception
+   * handling. IOExceptions will be turned into runtime exceptions.
+   */
+  public static long getFileSize(Path file) {
+    try {
+      return Files.size(file);
+    } catch (IOException exception) {
+      throw new RuntimeException("Failed to get file size for file: " + file.getFileName(), exception);
+    }
+  }
+
 }
