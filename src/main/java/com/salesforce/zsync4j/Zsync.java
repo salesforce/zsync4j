@@ -20,7 +20,7 @@ import com.google.common.base.Stopwatch;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ControlFile;
 import com.salesforce.zsync4j.internal.Range;
-import com.salesforce.zsync4j.internal.TargetFile;
+import com.salesforce.zsync4j.internal.OutputFile;
 import com.salesforce.zsync4j.internal.util.RangeFetcher;
 import com.salesforce.zsync4j.internal.util.RollingBuffer;
 import com.squareup.okhttp.OkHttpClient;
@@ -67,16 +67,16 @@ public class Zsync {
        * @return
        */
       public String getUsername() {
-        return username;
+        return this.username;
       }
 
       /**
        * Password for remote authentication
-       * 
+       *
        * @return
        */
       public String getPassword() {
-        return password;
+        return this.password;
       }
     }
 
@@ -141,14 +141,14 @@ public class Zsync {
      * @return
      */
     public Path getOutputFile() {
-      return outputFile;
+      return this.outputFile;
     }
 
     /**
      * Corresponds to the zsync -k parameter: the location at which to store the zsync control file.
      * This option only takes effect if the zsync URI passed as the first argument to
      * {@link Zsync#zsync(URI, Options)} is a remote (http) URL.
-     * 
+     *
      * @param saveZsyncFile
      * @return
      */
@@ -159,18 +159,18 @@ public class Zsync {
 
     /**
      * The location at which to persist the zsync file if remote, may be null
-     * 
+     *
      * @return
      */
     public Path getSaveZsyncFile() {
-      return saveZsyncFile;
+      return this.saveZsyncFile;
     }
 
     /**
      * Corresponds to the zsync -u parameter: the source URI from which the zsync file was
      * originally retrieved. Takes affect only if the first parameter to the
      * {@link Zsync#zsync(URI, Options)} method refers to a local file.
-     * 
+     *
      * @param zsyncUri
      * @return
      */
@@ -185,7 +185,7 @@ public class Zsync {
      * @return
      */
     public URI getZsyncFileSource() {
-      return zsyncUri;
+      return this.zsyncUri;
     }
 
     /**
@@ -202,11 +202,11 @@ public class Zsync {
 
     /**
      * Registered credentials
-     * 
+     *
      * @return
      */
     public Map<String, Credentials> getCredentials() {
-      return credentials;
+      return this.credentials;
     }
 
   }
@@ -227,14 +227,15 @@ public class Zsync {
    * @throws ZsyncFileNotFoundException
    * @throws OutputFileValidationException
    */
-  public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException, OutputFileValidationException {
+  public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException,
+      OutputFileValidationException {
     final Stopwatch s = Stopwatch.createStarted();
 
     // create copy, since options mutable
     options = new Options(options);
 
     final ControlFile controlFile;
-    try (InputStream in = toURL(zsyncFile).openStream()) {
+    try (InputStream in = this.toURL(zsyncFile).openStream()) {
       controlFile = ControlFile.read(in);
     } catch (FileNotFoundException e) {
       throw new ZsyncFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
@@ -242,14 +243,18 @@ public class Zsync {
       throw new RuntimeException("Failed to read zsync control file", e);
     }
 
-    final Path outputFile = options.getOutputFile() == null ? FileSystems.getDefault().getPath(controlFile.getHeader().getFilename()) : options.getOutputFile();
+    final Path outputFile =
+        options.getOutputFile() == null ? FileSystems.getDefault().getPath(
+            controlFile.getHeader().getFilename()) : options.getOutputFile();
     final List<Path> inputFiles = options.getInputFiles();
-    if (inputFiles.isEmpty())
+    if (inputFiles.isEmpty()) {
       throw new UnsupportedOperationException("TODO implement");
+    }
 
-    try (final TargetFile targetFile = new TargetFile(outputFile, controlFile)) {
-      if (!processInputFiles(targetFile, controlFile, inputFiles))
-        fetchRanges(targetFile, zsyncFile.resolve(controlFile.getHeader().getUrl()));
+    try (final OutputFile targetFile = new OutputFile(outputFile, controlFile)) {
+      if (!processInputFiles(targetFile, controlFile, inputFiles)) {
+        this.fetchRanges(targetFile, zsyncFile.resolve(controlFile.getHeader().getUrl()));
+      }
     } catch (OutputFileValidationException e) {
       throw e;
     } catch (IOException e) {
@@ -259,18 +264,23 @@ public class Zsync {
     System.out.println(s.stop());
   }
 
-  static boolean processInputFiles(TargetFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles) throws IOException {
-    for (Path inputFile : inputFiles)
-      if (processInputFile(targetFile, controlFile, inputFile))
+  static boolean processInputFiles(OutputFile targetFile, ControlFile controlFile,
+      Iterable<? extends Path> inputFiles) throws IOException {
+    for (Path inputFile : inputFiles) {
+      if (processInputFile(targetFile, controlFile, inputFile)) {
         return true;
+      }
+    }
     return false;
   }
 
-  static boolean processInputFile(TargetFile targetFile, ControlFile controlFile, Path inputFile) throws IOException {
+  static boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile)
+      throws IOException {
     // TODO pad end of input file
     try (final FileChannel channel = FileChannel.open(inputFile)) {
       final BlockMatcher matcher = BlockMatcher.create(controlFile);
-      final RollingBuffer buffer = new RollingBuffer(channel, matcher.getMatchBytes(), 16 * matcher.getMatchBytes());
+      final RollingBuffer buffer =
+          new RollingBuffer(channel, matcher.getMatchBytes(), 16 * matcher.getMatchBytes());
       int bytes;
       do {
         bytes = matcher.match(targetFile, buffer);
@@ -279,29 +289,33 @@ public class Zsync {
     return targetFile.isComplete();
   }
 
-  void fetchRanges(TargetFile targetFile, URI url) {
+  void fetchRanges(OutputFile targetFile, URI url) {
     final List<Range> missingRanges = targetFile.getMissingRanges();
-    if (missingRanges.isEmpty())
+    if (missingRanges.isEmpty()) {
       return;
+    }
     System.out.println("Missing ranges: " + missingRanges);
-    final RangeFetcher fetcher = new RangeFetcher(httpUrlFactory.client());
+    final RangeFetcher fetcher = new RangeFetcher(this.httpUrlFactory.client());
     fetcher.fetch(url, missingRanges, targetFile);
   }
 
   private URL toURL(URI uri) throws MalformedURLException {
-    final URLStreamHandler handler = httpUrlFactory.createURLStreamHandler(uri.getScheme());
-    return handler == null ? uri.toURL() : new URL(uri.getScheme(), uri.getHost(), uri.getPort(), uri.getPath(), handler);
+    final URLStreamHandler handler = this.httpUrlFactory.createURLStreamHandler(uri.getScheme());
+    return handler == null ? uri.toURL() : new URL(uri.getScheme(), uri.getHost(), uri.getPort(),
+        uri.getPath(), handler);
   }
 
   public static void main(String[] args) throws IOException, ZsyncFileNotFoundException {
-    if (args.length != 3)
+    if (args.length != 3) {
       throw new IllegalArgumentException("wrong number of args");
+    }
     final URI uri = URI.create(args[0]);
     final FileSystem fs = FileSystems.getDefault();
-    final Options options = new Options().addInputFile(fs.getPath(args[1])).setOutputFile(fs.getPath(args[2]));
+    final Options options =
+        new Options().addInputFile(fs.getPath(args[1])).setOutputFile(fs.getPath(args[2]));
     final Zsync zsync = new Zsync(new OkHttpClient());
-     for (int i = 0; i < 10; i++)
-    zsync.zsync(uri, options);
+    for (int i = 0; i < 10; i++) {
+      zsync.zsync(uri, options);
+    }
   }
-
 }

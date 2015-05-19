@@ -10,6 +10,6 @@ public abstract class BlockMatcher {
 
   public abstract int getMatchBytes();
 
-  public abstract int match(TargetFile targetFile, ReadableByteBuffer data);
+  public abstract int match(OutputFile targetFile, ReadableByteBuffer data);
 
 }

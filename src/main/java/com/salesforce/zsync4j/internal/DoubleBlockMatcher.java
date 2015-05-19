@@ -64,7 +64,7 @@ public class DoubleBlockMatcher extends BlockMatcher {
   }
 
   @Override
-  public int match(TargetFile targetFile, ReadableByteBuffer buffer) {
+  public int match(OutputFile targetFile, ReadableByteBuffer buffer) {
     switch (state) {
       case INIT:
         // initially we have to compute the rsum from scratch for both blocks
@@ -150,7 +150,7 @@ public class DoubleBlockMatcher extends BlockMatcher {
     }
   }
 
-  private List<Integer> tryMatchBoth(final TargetFile targetFile, final ReadableByteBuffer buffer) {
+  private List<Integer> tryMatchBoth(final OutputFile targetFile, final ReadableByteBuffer buffer) {
     final List<Integer> matches;
     final Long r = toLong(currentBlockSum.rsum.toInt(), nextBlockSum.rsum.toInt());
     // cheap negative check followed by more expensive check
@@ -164,12 +164,12 @@ public class DoubleBlockMatcher extends BlockMatcher {
     return matches;
   }
 
-  private List<Integer> tryMatchNext(final TargetFile targetFile, final ReadableByteBuffer buffer) {
+  private List<Integer> tryMatchNext(final OutputFile targetFile, final ReadableByteBuffer buffer) {
     final List<Integer> positions = targetFile.getPositions(currentBlockSum);
     return positions.isEmpty() ? Collections.<Integer>emptyList() : filterMatches(targetFile, buffer, positions);
   }
 
-  private List<Integer> filterMatches(final TargetFile targetFile, ReadableByteBuffer buffer, List<Integer> positions) {
+  private List<Integer> filterMatches(final OutputFile targetFile, ReadableByteBuffer buffer, List<Integer> positions) {
     // optimize common case
     if (positions.size() == 1) {
       return isNextMatch(targetFile, buffer, positions.get(0)) ? positions : Collections.<Integer>emptyList();
@@ -182,7 +182,7 @@ public class DoubleBlockMatcher extends BlockMatcher {
     }
   }
 
-  private boolean isNextMatch(TargetFile targetFile, ReadableByteBuffer buffer, Integer position) {
+  private boolean isNextMatch(OutputFile targetFile, ReadableByteBuffer buffer, Integer position) {
     final Integer next = position + 1;
     if (next == targetFile.getNumBlocks())
       return true;
