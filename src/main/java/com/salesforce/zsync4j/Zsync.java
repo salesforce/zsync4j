@@ -243,17 +243,20 @@ public class Zsync {
       throw new UnsupportedOperationException("TODO implement");
 
     try (final TargetFile targetFile = new TargetFile(outputFile, controlFile)) {
-      // first fill target file with blocks from local files
-      for (Path inputFile : inputFiles)
-        if (processInputFile(targetFile, controlFile, inputFile))
-          break;
-      // next fetch remaining blocks from remote
-      fetchRanges(targetFile, zsyncFile.resolve(controlFile.getHeader().getUrl()));
+      if (!processInputFiles(targetFile, controlFile, inputFiles))
+        fetchRanges(targetFile, zsyncFile.resolve(controlFile.getHeader().getUrl()));
     } catch (IOException e) {
       throw new RuntimeException("Failed to write target file file", e);
     }
 
     System.out.println(s.stop());
+  }
+
+  static boolean processInputFiles(TargetFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles) throws IOException {
+    for (Path inputFile : inputFiles)
+      if (processInputFile(targetFile, controlFile, inputFile))
+        return true;
+    return false;
   }
 
   static boolean processInputFile(TargetFile targetFile, ControlFile controlFile, Path inputFile) throws IOException {

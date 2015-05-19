@@ -34,7 +34,8 @@ public class TargetFile implements RangeReceiver, Closeable {
 
   // mutable state
   private final FileChannel channel;
-  private final boolean[] written;
+  private final boolean[] completed;
+  private int blocksRemaining;
 
   public TargetFile(Path path, ControlFile controlFile) throws IOException {
     this.path = path;
@@ -45,7 +46,8 @@ public class TargetFile implements RangeReceiver, Closeable {
     this.header = controlFile.getHeader();
     this.blockSums = ImmutableList.copyOf(controlFile.getBlockSums());
     this.positions = indexPositions(this.blockSums);
-    this.written = new boolean[blockSums.size()];
+    this.completed = new boolean[blockSums.size()];
+    this.blocksRemaining = completed.length;
   }
 
   static ListMultimap<BlockSum, Integer> indexPositions(List<BlockSum> blockSums) {
@@ -72,7 +74,7 @@ public class TargetFile implements RangeReceiver, Closeable {
   }
 
   public boolean write(int position, ReadableByteBuffer data, int offset, int length) {
-    if (written[position])
+    if (completed[position])
       return false;
     try {
       channel.position(position * header.getBlocksize());
@@ -80,15 +82,16 @@ public class TargetFile implements RangeReceiver, Closeable {
     } catch (IOException e) {
       throw new RuntimeException("Failed to read block at position " + position, e);
     }
-    return written[position] = true;
+    blocksRemaining--;
+    return completed[position] = true;
   }
 
   public List<Range> getMissingRanges() {
     final int blockSize = header.getBlocksize();
     final ImmutableList.Builder<Range> b = ImmutableList.builder();
     long start = -1;
-    for (int i = 0; i < written.length; i++) {
-      if (written[i]) {
+    for (int i = 0; i < completed.length; i++) {
+      if (completed[i]) {
         // if we're in a range, end it
         if (start != -1) {
           b.add(new Range(start, i * blockSize - 1));
@@ -100,7 +103,7 @@ public class TargetFile implements RangeReceiver, Closeable {
           start = i * blockSize;
         }
         // if this is the last block in the file map, we need to end the range
-        if (i == written.length - 1) {
+        if (i == completed.length - 1) {
           b.add(new Range(start, header.getLength() - 1));
         }
       }
@@ -109,11 +112,7 @@ public class TargetFile implements RangeReceiver, Closeable {
   }
 
   public boolean isComplete() {
-    for (int i = 0; i < written.length; i++) {
-      if (!written[i])
-        return false;
-    }
-    return true;
+    return blocksRemaining == 0;
   }
 
   @Override
@@ -131,9 +130,12 @@ public class TargetFile implements RangeReceiver, Closeable {
     } while (remaining > 0);
 
     final int first = (int) (range.first / header.getBlocksize());
-    final int last = (int) (range.last + 1 == header.getLength() ? written.length - 1 : (range.last + 1) / header.getBlocksize() - 1);
+    final int last = (int) (range.last + 1 == header.getLength() ? completed.length - 1 : (range.last + 1) / header.getBlocksize() - 1);
     for (int i = first; i <= last; i++) {
-      written[i] = true;
+      if (!completed[i]) {
+        blocksRemaining--;
+        completed[i] = true;
+      }
     }
   }
 
