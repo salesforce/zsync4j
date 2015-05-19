@@ -19,6 +19,7 @@ import java.util.List;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
+import com.salesforce.zsync4j.OutputFileListener;
 import com.salesforce.zsync4j.OutputFileValidationException;
 import com.salesforce.zsync4j.internal.util.RangeFetcher.RangeReceiver;
 import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
@@ -32,13 +33,16 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final Header header;
   private final List<BlockSum> blockSums;
   private final ListMultimap<BlockSum, Integer> positions;
+  private final OutputFileListener outputFileListener;
   // mutable state
   private final FileChannel channel;
   private final boolean[] completed;
   private int blocksRemaining;
 
-  public OutputFile(Path path, ControlFile controlFile, Listener listener) throws IOException {
+  public OutputFile(Path path, ControlFile controlFile, OutputFileListener outputFileListener)
+      throws IOException {
     this.path = path;
+    this.outputFileListener = outputFileListener;
     this.tempPath = path.getParent().resolve(path.getFileName().toString() + ".part");
     mkdirs(path.getParent());
     this.channel = FileChannel.open(this.tempPath, CREATE, WRITE, READ);
@@ -81,6 +85,7 @@ public class OutputFile implements RangeReceiver, Closeable {
     try {
       this.channel.position(position * this.header.getBlocksize());
       data.write(this.channel, offset, length);
+      this.outputFileListener.bytesWritten(length);
     } catch (IOException e) {
       throw new RuntimeException("Failed to read block at position " + position, e);
     }
@@ -131,7 +136,10 @@ public class OutputFile implements RangeReceiver, Closeable {
     final long size = range.size();
     long remaining = size;
     do {
-      remaining -= this.channel.transferFrom(src, range.first, size);
+      long transferred = this.channel.transferFrom(src, range.first, size);
+      remaining -= transferred;
+      this.outputFileListener.bytesDownloaded(transferred);
+      this.outputFileListener.bytesWritten(transferred);
     } while (remaining > 0);
 
     final int first = (int) (range.first / this.header.getBlocksize());

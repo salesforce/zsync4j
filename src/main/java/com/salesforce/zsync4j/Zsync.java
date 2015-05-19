@@ -19,8 +19,8 @@ import java.util.Map;
 import com.google.common.base.Stopwatch;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ControlFile;
-import com.salesforce.zsync4j.internal.Range;
 import com.salesforce.zsync4j.internal.OutputFile;
+import com.salesforce.zsync4j.internal.Range;
 import com.salesforce.zsync4j.internal.util.RangeFetcher;
 import com.salesforce.zsync4j.internal.util.RollingBuffer;
 import com.squareup.okhttp.OkHttpClient;
@@ -224,15 +224,35 @@ public class Zsync {
    *
    * @param zsyncFile
    * @param options
+   * @param outputFileListener
    * @throws ZsyncFileNotFoundException
    * @throws OutputFileValidationException
    */
   public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException,
       OutputFileValidationException {
+    this.zsync(zsyncFile, options, OutputFileListener.NO_OP);
+  }
+
+  /**
+   * Retrieves the remote file pointed to by the given zsync control file. The supplied listener is
+   * called back to as data is downloaded and the output file is written.
+   *
+   * @param zsyncFile
+   * @param options
+   * @param outputFileListener
+   * @throws ZsyncFileNotFoundException
+   * @throws OutputFileValidationException
+   */
+  public void zsync(URI zsyncFile, Options options, OutputFileListener outputFileListener)
+      throws ZsyncFileNotFoundException, OutputFileValidationException {
     final Stopwatch s = Stopwatch.createStarted();
 
     // create copy, since options mutable
     options = new Options(options);
+
+    if (outputFileListener == null) {
+      outputFileListener = OutputFileListener.NO_OP;
+    }
 
     final ControlFile controlFile;
     try (InputStream in = this.toURL(zsyncFile).openStream()) {
@@ -251,14 +271,21 @@ public class Zsync {
       throw new UnsupportedOperationException("TODO implement");
     }
 
-    try (final OutputFile targetFile = new OutputFile(outputFile, controlFile)) {
+    URI remoteFileUri = zsyncFile.resolve(controlFile.getHeader().getUrl());
+
+    outputFileListener.transferStarted(outputFile, remoteFileUri, controlFile.getHeader()
+        .getLength());
+
+    try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, outputFileListener)) {
       if (!processInputFiles(targetFile, controlFile, inputFiles)) {
-        this.fetchRanges(targetFile, zsyncFile.resolve(controlFile.getHeader().getUrl()));
+        this.fetchRanges(targetFile, remoteFileUri);
       }
     } catch (OutputFileValidationException e) {
       throw e;
     } catch (IOException e) {
       throw new RuntimeException("Failed to write target file file", e);
+    } finally {
+      outputFileListener.transferEnded();
     }
 
     System.out.println(s.stop());
