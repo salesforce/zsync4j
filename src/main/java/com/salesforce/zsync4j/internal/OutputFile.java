@@ -9,7 +9,6 @@ import static java.nio.file.StandardOpenOption.WRITE;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
@@ -33,13 +32,12 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final Header header;
   private final List<BlockSum> blockSums;
   private final ListMultimap<BlockSum, Integer> positions;
-
   // mutable state
   private final FileChannel channel;
   private final boolean[] completed;
   private int blocksRemaining;
 
-  public OutputFile(Path path, ControlFile controlFile) throws IOException {
+  public OutputFile(Path path, ControlFile controlFile, Listener listener) throws IOException {
     this.path = path;
     this.tempPath = path.getParent().resolve(path.getFileName().toString() + ".part");
     mkdirs(path.getParent());
@@ -163,15 +161,5 @@ public class OutputFile implements RangeReceiver, Closeable {
       this.channel.close();
     }
     Files.move(this.tempPath, this.path, REPLACE_EXISTING, REPLACE_EXISTING);
-  }
-
-  public static interface Listener {
-    void transferStarted(Path pathToOutputFile, URI remoteFileUri, long remoteFileNumberOfBytes);
-
-    void bytesDownloaded(long numberOfBytes);
-
-    void bytesWritten(long numberOfBytes);
-
-    void transferEnded();
   }
 }
