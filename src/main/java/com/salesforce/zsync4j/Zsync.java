@@ -26,7 +26,10 @@ import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.OkUrlFactory;
 
 /**
- * Zsync download client.
+ * Zsync download client: reduces the number of bytes retrieved from a remote server by drawing
+ * unchanged parts of the file from a set of local input files.
+ *
+ * @see <a href="http://zsync.moria.org.uk/">http://zsync.moria.org.uk/</a>
  *
  * @author bbusjaeger
  *
@@ -57,10 +60,20 @@ public class Zsync {
         this.password = password;
       }
 
+      /**
+       * User name for remote authentication
+       *
+       * @return
+       */
       public String getUsername() {
         return username;
       }
 
+      /**
+       * Password for remote authentication
+       * 
+       * @return
+       */
       public String getPassword() {
         return password;
       }
@@ -165,15 +178,32 @@ public class Zsync {
       return this;
     }
 
+    /**
+     * The remote URI from which the local zsync file was originally retrieved from
+     *
+     * @return
+     */
     public URI getZsyncFileSource() {
       return zsyncUri;
     }
 
+    /**
+     * Registers the given credentials for the given hostname.
+     *
+     * @param hostname
+     * @param credentials
+     * @return
+     */
     public Options putCredentials(String hostname, Credentials credentials) {
       this.credentials.put(hostname, credentials);
       return this;
     }
 
+    /**
+     * Registered credentials
+     * 
+     * @return
+     */
     public Map<String, Credentials> getCredentials() {
       return credentials;
     }
@@ -188,6 +218,12 @@ public class Zsync {
     this.httpUrlFactory = new OkUrlFactory(httpClient);
   }
 
+  /**
+   * Retrieves the remote file pointed to by the given zsync control file.
+   *
+   * @param zsyncFile
+   * @param options
+   */
   public void zsync(URI zsyncFile, Options options) {
     final Stopwatch s = Stopwatch.createStarted();
 
@@ -206,14 +242,13 @@ public class Zsync {
     if (inputFiles.isEmpty())
       throw new UnsupportedOperationException("TODO implement");
 
-    final BlockMatcher matcher = BlockMatcher.create(controlFile);
     try (final TargetFile targetFile = new TargetFile(outputFile, controlFile)) {
       // first fill target file with blocks from local files
       for (Path inputFile : inputFiles)
-        if (processInputFile(targetFile, matcher, inputFile))
+        if (processInputFile(targetFile, controlFile, inputFile))
           break;
       // next fetch remaining blocks from remote
-      writeRemote(targetFile, zsyncFile.resolve(controlFile.getHeader().getUrl()));
+      fetchRanges(targetFile, zsyncFile.resolve(controlFile.getHeader().getUrl()));
     } catch (IOException e) {
       throw new RuntimeException("Failed to write target file file", e);
     }
@@ -221,9 +256,10 @@ public class Zsync {
     System.out.println(s.stop());
   }
 
-  static boolean processInputFile(TargetFile targetFile, BlockMatcher matcher, Path inputFile) throws IOException {
-    // TODO pad end of input file?
+  static boolean processInputFile(TargetFile targetFile, ControlFile controlFile, Path inputFile) throws IOException {
+    // TODO pad end of input file
     try (final FileChannel channel = FileChannel.open(inputFile)) {
+      final BlockMatcher matcher = BlockMatcher.create(controlFile);
       final RollingBuffer buffer = new RollingBuffer(channel, matcher.getMatchBytes(), 16 * matcher.getMatchBytes());
       int bytes;
       do {
@@ -233,7 +269,7 @@ public class Zsync {
     return targetFile.isComplete();
   }
 
-  void writeRemote(TargetFile targetFile, URI url) {
+  void fetchRanges(TargetFile targetFile, URI url) {
     final List<Range> missingRanges = targetFile.getMissingRanges();
     if (missingRanges.isEmpty())
       return;

@@ -26,8 +26,6 @@ public class DoubleBlockMatcher extends BlockMatcher {
   private final int blockSize;
   private final Set<Long> rsumHashSet;
 
-
-
   // mutable state, carried over across invocations
   private State state;
   private final MutableBlockSum currentBlockSum;
