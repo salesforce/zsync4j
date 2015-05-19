@@ -1,6 +1,7 @@
 package com.salesforce.zsync4j.internal;
 
 import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.READ;
 import static java.nio.file.StandardOpenOption.WRITE;
 
 import java.io.Closeable;
@@ -23,7 +24,6 @@ import com.salesforce.zsync4j.internal.util.ZsyncUtil;
 public class TargetFile implements RangeReceiver, Closeable {
 
   // immutable state
-  private final Path path;
   private final Header header;
   private final List<BlockSum> blockSums;
   private final ListMultimap<BlockSum, Integer> positions;
@@ -33,13 +33,12 @@ public class TargetFile implements RangeReceiver, Closeable {
   private final boolean[] written;
 
   public TargetFile(Path path, ControlFile controlFile) throws IOException {
-    this.path = path;
     try {
       Files.createDirectories(path.getParent());
     } catch (IOException e) {
       // ignore
     }
-    this.channel = FileChannel.open(path, CREATE, WRITE);
+    this.channel = FileChannel.open(path, CREATE, WRITE, READ);
 
     this.header = controlFile.getHeader();
     this.blockSums = ImmutableList.copyOf(controlFile.getBlockSums());
@@ -118,7 +117,7 @@ public class TargetFile implements RangeReceiver, Closeable {
     final long size = range.size();
     long remaining = size;
     do {
-     remaining -= channel.transferFrom(src, range.first, size);
+      remaining -= channel.transferFrom(src, range.first, size);
     } while (remaining > 0);
 
     final int first = (int) (range.first / header.getBlocksize());
@@ -133,7 +132,8 @@ public class TargetFile implements RangeReceiver, Closeable {
     final List<Range> missingRanges = getMissingRanges();
     if (!missingRanges.isEmpty())
       throw new IllegalStateException("Missing ranges in target file: " + missingRanges);
-    if (!header.getSha1().equals(ZsyncUtil.computeSha1(path)))
+    channel.position(0); // reset channel to beginning to compute full SHA1
+    if (!header.getSha1().equals(ZsyncUtil.computeSha1(channel)))
       throw new IllegalStateException("Target file sha1 does not match expected");
   }
 }

@@ -1,10 +1,8 @@
 package com.salesforce.zsync4j.internal.util;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.channels.ReadableByteChannel;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
@@ -56,14 +54,13 @@ public class ZsyncUtil {
     return (short) (b < 0 ? b & 0xFF : b);
   }
 
-  public static String computeSha1(Path path) throws IOException {
+  public static String computeSha1(ReadableByteChannel channel) throws IOException {
     final MessageDigest sha1 = newSHA1();
-    final byte[] b = new byte[8192];
-    try (InputStream in = Files.newInputStream(path)) {
-      int r;
-      while ((r = in.read(b)) != -1) {
-        sha1.update(b, 0, r);
-      }
+    final ByteBuffer buf = ByteBuffer.allocate(8192);
+    while (channel.read(buf) != -1) {
+      buf.flip();
+      sha1.update(buf);
+      buf.clear();
     }
     return toHexString(ByteBuffer.wrap(sha1.digest()));
   }
