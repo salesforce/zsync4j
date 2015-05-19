@@ -19,6 +19,7 @@ import java.util.List;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
+import com.salesforce.zsync4j.OutputFileValidationException;
 import com.salesforce.zsync4j.internal.util.RangeFetcher.RangeReceiver;
 import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
 import com.salesforce.zsync4j.internal.util.ZsyncUtil;
@@ -141,12 +142,16 @@ public class TargetFile implements RangeReceiver, Closeable {
 
   @Override
   public void close() throws IOException {
-    final List<Range> missingRanges = getMissingRanges();
-    if (!missingRanges.isEmpty())
-      throw new IllegalStateException("Missing ranges in target file: " + missingRanges);
-    channel.position(0); // reset channel to beginning to compute full SHA1
-    if (!header.getSha1().equals(ZsyncUtil.computeSha1(channel)))
-      throw new IllegalStateException("Target file sha1 does not match expected");
+    try {
+      if (!isComplete())
+        throw new OutputFileValidationException("Target incomplete: missing ranges: " + getMissingRanges());
+      channel.position(0); // reset channel to beginning to compute full SHA1
+      if (!header.getSha1().equals(ZsyncUtil.computeSha1(channel)))
+        throw new OutputFileValidationException("Target file sha1 does not match expected");
+    } finally {
+      channel.close();
+    }
     Files.move(tempPath, path, REPLACE_EXISTING, REPLACE_EXISTING);
   }
+
 }

@@ -1,5 +1,6 @@
 package com.salesforce.zsync4j;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -223,8 +224,10 @@ public class Zsync {
    *
    * @param zsyncFile
    * @param options
+   * @throws ZsyncFileNotFoundException
+   * @throws OutputFileValidationException
    */
-  public void zsync(URI zsyncFile, Options options) {
+  public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException, OutputFileValidationException {
     final Stopwatch s = Stopwatch.createStarted();
 
     // create copy, since options mutable
@@ -233,6 +236,8 @@ public class Zsync {
     final ControlFile controlFile;
     try (InputStream in = toURL(zsyncFile).openStream()) {
       controlFile = ControlFile.read(in);
+    } catch (FileNotFoundException e) {
+      throw new ZsyncFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
     } catch (IOException e) {
       throw new RuntimeException("Failed to read zsync control file", e);
     }
@@ -245,6 +250,8 @@ public class Zsync {
     try (final TargetFile targetFile = new TargetFile(outputFile, controlFile)) {
       if (!processInputFiles(targetFile, controlFile, inputFiles))
         fetchRanges(targetFile, zsyncFile.resolve(controlFile.getHeader().getUrl()));
+    } catch (OutputFileValidationException e) {
+      throw e;
     } catch (IOException e) {
       throw new RuntimeException("Failed to write target file file", e);
     }
@@ -286,14 +293,15 @@ public class Zsync {
     return handler == null ? uri.toURL() : new URL(uri.getScheme(), uri.getHost(), uri.getPort(), uri.getPath(), handler);
   }
 
-  public static void main(String[] args) throws IOException {
+  public static void main(String[] args) throws IOException, ZsyncFileNotFoundException {
     if (args.length != 3)
       throw new IllegalArgumentException("wrong number of args");
     final URI uri = URI.create(args[0]);
     final FileSystem fs = FileSystems.getDefault();
     final Options options = new Options().addInputFile(fs.getPath(args[1])).setOutputFile(fs.getPath(args[2]));
     final Zsync zsync = new Zsync(new OkHttpClient());
-    // for (int i = 0; i < 10; i++)
+     for (int i = 0; i < 10; i++)
     zsync.zsync(uri, options);
   }
+
 }
