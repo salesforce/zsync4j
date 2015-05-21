@@ -291,9 +291,6 @@ public class Zsync {
 
     final Path outputFile = o.getOutputFile() == null ? FileSystems.getDefault().getPath(controlFile.getHeader().getFilename()) : o.getOutputFile();
     final List<Path> inputFiles = o.getInputFiles();
-    if (inputFiles.isEmpty()) {
-      throw new UnsupportedOperationException("TODO implement");
-    }
 
     URI remoteFileUri = zsyncFile.resolve(controlFile.getHeader().getUrl());
 
@@ -346,7 +343,6 @@ public class Zsync {
     if (missingRanges.isEmpty()) {
       return;
     }
-    System.out.println("Missing ranges: " + missingRanges);
     final RangeFetcher fetcher = new RangeFetcher(this.httpUrlFactory.client());
     fetcher.fetch(url, missingRanges, targetFile);
   }
