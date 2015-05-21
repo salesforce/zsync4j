@@ -1,6 +1,5 @@
 package com.salesforce.zsync4j.internal;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -10,7 +9,6 @@ import com.google.common.collect.ImmutableList;
 public class ImmutableBlockSum extends BlockSum {
 
   public static List<ImmutableBlockSum> readSums(InputStream in, int numBlocks, int rsumBytes, int checksumBytes) throws IOException {
-    in = new BufferedInputStream(in);
     final ImmutableList.Builder<ImmutableBlockSum> b = ImmutableList.builder();
     for (int i = 0; i < numBlocks; i++)
       b.add(ImmutableBlockSum.read(in, rsumBytes, checksumBytes));

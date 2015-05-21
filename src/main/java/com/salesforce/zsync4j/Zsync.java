@@ -1,9 +1,11 @@
 package com.salesforce.zsync4j;
 
+import java.io.BufferedInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.Proxy;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLStreamHandler;
@@ -15,16 +17,21 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.base.Stopwatch;
+import com.salesforce.zsync4j.Zsync.Options.Credentials;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ControlFile;
 import com.salesforce.zsync4j.internal.OutputFile;
 import com.salesforce.zsync4j.internal.Range;
 import com.salesforce.zsync4j.internal.util.RangeFetcher;
 import com.salesforce.zsync4j.internal.util.RollingBuffer;
+import com.squareup.okhttp.Authenticator;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.OkUrlFactory;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 
 /**
  * Zsync download client: reduces the number of bytes retrieved from a remote server by drawing
@@ -228,8 +235,7 @@ public class Zsync {
    * @throws ZsyncFileNotFoundException
    * @throws OutputFileValidationException
    */
-  public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException,
-      OutputFileValidationException {
+  public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException, OutputFileValidationException {
     this.zsync(zsyncFile, options, OutputFileListener.NO_OP);
   }
 
@@ -243,19 +249,36 @@ public class Zsync {
    * @throws ZsyncFileNotFoundException
    * @throws OutputFileValidationException
    */
-  public void zsync(URI zsyncFile, Options options, OutputFileListener outputFileListener)
-      throws ZsyncFileNotFoundException, OutputFileValidationException {
+  public void zsync(URI zsyncFile, Options options, OutputFileListener outputFileListener) throws ZsyncFileNotFoundException, OutputFileValidationException {
     final Stopwatch s = Stopwatch.createStarted();
 
     // create copy, since options mutable
-    options = new Options(options);
+    final Options o = new Options(options);
 
     if (outputFileListener == null) {
       outputFileListener = OutputFileListener.NO_OP;
     }
 
+    // TODO OK to set authenticator for entire client?
+    httpUrlFactory.client().setAuthenticator(new Authenticator() {
+      @Override
+      public Request authenticateProxy(Proxy proxy, Response response) throws IOException {
+        return authenticate(proxy, response);
+      }
+
+      @Override
+      public Request authenticate(Proxy proxy, Response response) throws IOException {
+        final String host = response.request().uri().getHost();
+        final Credentials creds = o.getCredentials().get(host);
+        final Request.Builder b = response.request().newBuilder();
+        if (creds != null)
+          b.header("Authorization", com.squareup.okhttp.Credentials.basic(creds.getUsername(), creds.getPassword()));
+        return b.build();
+      }
+    });
+
     final ControlFile controlFile;
-    try (InputStream in = this.toURL(zsyncFile).openStream()) {
+    try (InputStream in = new BufferedInputStream(this.toURL(zsyncFile).openStream())) {
       controlFile = ControlFile.read(in);
     } catch (FileNotFoundException e) {
       throw new ZsyncFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
@@ -263,18 +286,15 @@ public class Zsync {
       throw new RuntimeException("Failed to read zsync control file", e);
     }
 
-    final Path outputFile =
-        options.getOutputFile() == null ? FileSystems.getDefault().getPath(
-            controlFile.getHeader().getFilename()) : options.getOutputFile();
-    final List<Path> inputFiles = options.getInputFiles();
+    final Path outputFile = o.getOutputFile() == null ? FileSystems.getDefault().getPath(controlFile.getHeader().getFilename()) : o.getOutputFile();
+    final List<Path> inputFiles = o.getInputFiles();
     if (inputFiles.isEmpty()) {
       throw new UnsupportedOperationException("TODO implement");
     }
 
     URI remoteFileUri = zsyncFile.resolve(controlFile.getHeader().getUrl());
 
-    outputFileListener.transferStarted(outputFile, remoteFileUri, controlFile.getHeader()
-        .getLength());
+    outputFileListener.transferStarted(outputFile, remoteFileUri, controlFile.getHeader().getLength());
 
     try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, outputFileListener)) {
       if (!processInputFiles(targetFile, controlFile, inputFiles)) {
@@ -291,8 +311,7 @@ public class Zsync {
     System.out.println(s.stop());
   }
 
-  static boolean processInputFiles(OutputFile targetFile, ControlFile controlFile,
-      Iterable<? extends Path> inputFiles) throws IOException {
+  static boolean processInputFiles(OutputFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles) throws IOException {
     for (Path inputFile : inputFiles) {
       if (processInputFile(targetFile, controlFile, inputFile)) {
         return true;
@@ -301,13 +320,11 @@ public class Zsync {
     return false;
   }
 
-  static boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile)
-      throws IOException {
+  static boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile) throws IOException {
     // TODO pad end of input file
     try (final FileChannel channel = FileChannel.open(inputFile)) {
       final BlockMatcher matcher = BlockMatcher.create(controlFile);
-      final RollingBuffer buffer =
-          new RollingBuffer(channel, matcher.getMatchBytes(), 16 * matcher.getMatchBytes());
+      final RollingBuffer buffer = new RollingBuffer(channel, matcher.getMatchBytes(), 16 * matcher.getMatchBytes());
       int bytes;
       do {
         bytes = matcher.match(targetFile, buffer);
@@ -328,21 +345,60 @@ public class Zsync {
 
   private URL toURL(URI uri) throws MalformedURLException {
     final URLStreamHandler handler = this.httpUrlFactory.createURLStreamHandler(uri.getScheme());
-    return handler == null ? uri.toURL() : new URL(uri.getScheme(), uri.getHost(), uri.getPort(),
-        uri.getPath(), handler);
+    return handler == null ? uri.toURL() : new URL(uri.getScheme(), uri.getHost(), uri.getPort(), uri.getPath(), handler);
   }
 
+  // this is just a temporary hacked up CLI for testing purposes
   public static void main(String[] args) throws IOException, ZsyncFileNotFoundException {
-    if (args.length != 3) {
-      throw new IllegalArgumentException("wrong number of args");
-    }
-    final URI uri = URI.create(args[0]);
+    if (args.length == 0)
+      throw new IllegalArgumentException("Must specify at least zsync file url");
+
+    if (args.length % 2 == 0)
+      throw new IllegalArgumentException("Must specify pairs of args");
+
     final FileSystem fs = FileSystems.getDefault();
-    final Options options =
-        new Options().addInputFile(fs.getPath(args[1])).setOutputFile(fs.getPath(args[2]));
-    final Zsync zsync = new Zsync(new OkHttpClient());
-    for (int i = 0; i < 10; i++) {
-      zsync.zsync(uri, options);
+    final Options options = new Options();
+    for (int i = 0; i < args.length - 1; i++) {
+      if ("-A".equals(args[i])) {
+        final String auth = args[++i];
+        final int eq, cl;
+        if ((eq = auth.indexOf('=')) > 0 && (cl = auth.indexOf(':', eq + 1)) > 0) {
+          options.putCredentials(auth.substring(0, eq), new Credentials(auth.substring(eq + 1, cl), auth.substring(cl + 1)));
+        } else {
+          throw new IllegalArgumentException("authenticator must be of form 'hostname=username:password'");
+        }
+      } else if ("-i".equals(args[i])) {
+        options.addInputFile(fs.getPath(args[++i]));
+      } else if ("-o".equals(args[i])) {
+        options.setOutputFile(fs.getPath(args[++i]));
+      }
     }
+    final URI uri = URI.create(args[args.length - 1]);
+
+    final Zsync zsync = new Zsync(new OkHttpClient());
+    final OutputFileListener l = new OutputFileListener() {
+      final AtomicLong total = new AtomicLong();
+      final AtomicLong dl = new AtomicLong();
+
+      @Override
+      public void transferStarted(Path pathToOutputFile, URI remoteFileUri, long remoteFileNumberOfBytes) {
+        total.set(remoteFileNumberOfBytes);
+      }
+
+      @Override
+      public void bytesDownloaded(long numberOfBytes) {
+        dl.addAndGet(numberOfBytes);
+      }
+
+      @Override
+      public void bytesWritten(long numberOfBytes) {}
+
+      @Override
+      public void transferEnded() {
+        System.out.println("Downloaded " + (dl.get() / 1024 / 1024) + "MB of " + (total.get() / 1024 / 1024) + " MB");
+      }
+    };
+
+    zsync.zsync(uri, options, l);
   }
 }

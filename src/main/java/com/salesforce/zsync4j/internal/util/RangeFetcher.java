@@ -92,9 +92,10 @@ public class RangeFetcher {
     if (!(in.read() == '\r' && in.read() == '\n' && in.read() == '-' && in.read() == '-'))
       throw new RuntimeException("Expected part being not matched");
     final byte[] b = new byte[boundary.length];
-    if (in.read(b) == -1)
-      throw new RuntimeException("Premature end of body");
-    if (!Arrays.equals(boundary, b))
+    int read = 0, r;
+    while (read < b.length && (r = in.read(b, read, b.length - read)) != -1)
+      read += r;
+    if (read != b.length || !Arrays.equals(boundary, b))
       throw new RuntimeException("Invalid multipart boundary");
     final int r1 = in.read();
     final int r2 = in.read();
