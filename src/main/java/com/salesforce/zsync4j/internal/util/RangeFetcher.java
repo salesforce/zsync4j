@@ -12,6 +12,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.net.MediaType;
 import com.salesforce.zsync4j.internal.Range;
@@ -24,14 +25,26 @@ public class RangeFetcher {
   public static interface RangeReceiver {
     void receive(Range range, InputStream in) throws IOException;
   }
+  
+  private static final int MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST = 50;
 
   private final OkHttpClient httpClient;
 
   public RangeFetcher(OkHttpClient httpClient) {
+    if (httpClient == null) {
+      throw new IllegalArgumentException("httpClient cannot be null");
+    }
     this.httpClient = httpClient;
   }
 
-  public void fetch(URI url, List<Range> ranges, RangeReceiver receiver) {
+  public void fetch(URI url, List<Range> allRanges, RangeReceiver receiver) {
+    List<List<Range>> chunkedRanges = Lists.partition(allRanges, MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST);
+    for (List<Range> rangeChunk : chunkedRanges) {
+      fetchInternal(url, rangeChunk, receiver);
+    }
+  }
+  
+  private void fetchInternal(URI url, List<Range> ranges, RangeReceiver receiver) {
     final Set<Range> remaining = new LinkedHashSet<>(ranges);
 
     while (!remaining.isEmpty()) {

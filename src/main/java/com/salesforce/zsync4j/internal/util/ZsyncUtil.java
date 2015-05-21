@@ -103,5 +103,4 @@ public class ZsyncUtil {
       throw new RuntimeException("Failed to get file size for file: " + file.getFileName(), exception);
     }
   }
-
 }
