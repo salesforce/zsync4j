@@ -1,5 +1,7 @@
 package com.salesforce.zsync4j;
 
+import static com.salesforce.zsync4j.OutputFileListener.OutputFileEvent.*;
+
 import java.io.BufferedInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -20,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.base.Stopwatch;
+import com.salesforce.zsync4j.OutputFileListener.OutputFileEvent;
 import com.salesforce.zsync4j.Zsync.Options.Credentials;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ControlFile;
@@ -294,18 +297,23 @@ public class Zsync {
 
     URI remoteFileUri = zsyncFile.resolve(controlFile.getHeader().getUrl());
 
-    outputFileListener.transferStarted(outputFile, remoteFileUri, controlFile.getHeader().getLength());
+    outputFileListener.transferStarted(transferStartedEvent(outputFile, remoteFileUri, 
+        controlFile.getHeader().getLength()));
 
-    try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, outputFileListener)) {
+    Exception exception = null;
+    try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, remoteFileUri, outputFileListener)) {
       if (!processInputFiles(targetFile, controlFile, inputFiles)) {
         this.fetchRanges(targetFile, remoteFileUri);
       }
     } catch (OutputFileValidationException e) {
+      exception = e;
       throw e;
     } catch (IOException e) {
-      throw new RuntimeException("Failed to write target file file", e);
+      exception = new RuntimeException("Failed to write target file file", e);
+      throw (RuntimeException) exception;
     } finally {
-      outputFileListener.transferEnded();
+      outputFileListener.transferEnded(transferEndedEvent(outputFile, remoteFileUri, 
+          controlFile.getHeader().getLength(), exception));
     }
 
     System.out.println(s.stop());
@@ -381,20 +389,20 @@ public class Zsync {
       final AtomicLong dl = new AtomicLong();
 
       @Override
-      public void transferStarted(Path pathToOutputFile, URI remoteFileUri, long remoteFileNumberOfBytes) {
-        total.set(remoteFileNumberOfBytes);
+      public void transferStarted(OutputFileEvent event) {
+        total.set(event.getRemoteFileSizeInBytes());
       }
 
       @Override
-      public void bytesDownloaded(long numberOfBytes) {
-        dl.addAndGet(numberOfBytes);
+      public void bytesDownloaded(OutputFileEvent event) {
+        dl.addAndGet(event.getBytesDownloaded());
       }
 
       @Override
-      public void bytesWritten(long numberOfBytes) {}
+      public void bytesWritten(OutputFileEvent event) {}
 
       @Override
-      public void transferEnded() {
+      public void transferEnded(OutputFileEvent event) {
         System.out.println("Downloaded " + (dl.get() / 1024 / 1024) + "MB of " + (total.get() / 1024 / 1024) + " MB");
       }
     };

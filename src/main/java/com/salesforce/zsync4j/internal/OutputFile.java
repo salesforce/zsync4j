@@ -1,5 +1,7 @@
 package com.salesforce.zsync4j.internal;
 
+import static com.salesforce.zsync4j.OutputFileListener.OutputFileEvent.bytesDownloadedEvent;
+import static com.salesforce.zsync4j.OutputFileListener.OutputFileEvent.bytesWrittenEvent;
 import static com.salesforce.zsync4j.internal.util.ZsyncUtil.mkdirs;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -9,6 +11,7 @@ import static java.nio.file.StandardOpenOption.WRITE;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
@@ -29,6 +32,7 @@ public class OutputFile implements RangeReceiver, Closeable {
 
   // immutable state
   private final Path path;
+  private final URI remoteUri;
   private final Path tempPath;
   private final Header header;
   private final List<BlockSum> blockSums;
@@ -39,9 +43,10 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final boolean[] completed;
   private int blocksRemaining;
 
-  public OutputFile(Path path, ControlFile controlFile, OutputFileListener outputFileListener)
+  public OutputFile(Path path, ControlFile controlFile, URI remoteUri, OutputFileListener outputFileListener)
       throws IOException {
     this.path = path;
+    this.remoteUri = remoteUri;
     this.outputFileListener = outputFileListener;
     this.tempPath = path.getParent().resolve(path.getFileName().toString() + ".part");
     mkdirs(path.getParent());
@@ -85,7 +90,8 @@ public class OutputFile implements RangeReceiver, Closeable {
     try {
       this.channel.position(position * this.header.getBlocksize());
       data.write(this.channel, offset, length);
-      this.outputFileListener.bytesWritten(length);
+      this.outputFileListener.bytesWritten(bytesWrittenEvent(this.path, this.remoteUri, this.header.getLength(), 
+          length));
     } catch (IOException e) {
       throw new RuntimeException("Failed to read block at position " + position, e);
     }
@@ -138,8 +144,10 @@ public class OutputFile implements RangeReceiver, Closeable {
     do {
       long transferred = this.channel.transferFrom(src, range.first, size);
       remaining -= transferred;
-      this.outputFileListener.bytesDownloaded(transferred);
-      this.outputFileListener.bytesWritten(transferred);
+      this.outputFileListener.bytesDownloaded(bytesDownloadedEvent(this.path, this.remoteUri, this.header.getLength(), 
+          transferred));
+      this.outputFileListener.bytesWritten(bytesWrittenEvent(this.path, this.remoteUri, this.header.getLength(), 
+          transferred));
     } while (remaining > 0);
 
     final int first = (int) (range.first / this.header.getBlocksize());
