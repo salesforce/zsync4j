@@ -91,4 +91,24 @@
       </plugins>
     </pluginManagement>
   </build>
+  
+  <repositories>
+    <repository>
+      <releases>
+        <enabled>true</enabled>
+        <updatePolicy>always</updatePolicy>
+        <checksumPolicy>warn</checksumPolicy>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+        <updatePolicy>never</updatePolicy>
+        <checksumPolicy>fail</checksumPolicy>
+      </snapshots>
+      <id>nexus.soma</id>
+      <name>Salesforce Nexus</name>
+      <url>https://nexus.soma.salesforce.com/nexus/content/groups/public/</url>
+      <layout>default</layout>
+    </repository>
+  </repositories>
+  
 </project>
