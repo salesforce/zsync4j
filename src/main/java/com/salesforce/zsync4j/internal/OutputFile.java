@@ -7,6 +7,7 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.READ;
 import static java.nio.file.StandardOpenOption.WRITE;
+import static java.nio.file.attribute.FileTime.fromMillis;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -39,6 +40,7 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final int lastBlockSize;
   private final long length;
   private final String sha1;
+  private final long mtime;
   private final List<BlockSum> blockSums;
   private final ListMultimap<BlockSum, Integer> positions;
   private final OutputFileListener outputFileListener;
@@ -60,6 +62,7 @@ public class OutputFile implements RangeReceiver, Closeable {
     this.length = header.getLength();
     this.lastBlockSize = (int) (length % blockSize == 0 ? blockSize : length % blockSize);
     this.sha1 = header.getSha1();
+    this.mtime = header.getMtime().getTime();
 
     this.blockSums = ImmutableList.copyOf(controlFile.getBlockSums());
     this.positions = indexPositions(this.blockSums);
@@ -178,5 +181,6 @@ public class OutputFile implements RangeReceiver, Closeable {
       this.channel.close();
     }
     Files.move(this.tempPath, this.path, REPLACE_EXISTING, REPLACE_EXISTING);
+    Files.setLastModifiedTime(this.path, fromMillis(mtime));
   }
 }
