@@ -11,7 +11,9 @@ public class ControlFile {
   public static ControlFile read(final InputStream in) throws IOException {
     final SplitInputStream firstPart = new SplitInputStream(in, new byte[] {'\n', '\n'});
     final Header header = Header.read(firstPart);
-    final List<? extends BlockSum> blockSums = ImmutableBlockSum.readSums(firstPart.next(), header.getNumBlocks(), header.getRsumBytes(), header.getChecksumBytes());
+    final List<? extends BlockSum> blockSums =
+        ImmutableBlockSum.readSums(firstPart.next(), header.getNumBlocks(), header.getRsumBytes(),
+            header.getChecksumBytes());
     return new ControlFile(header, blockSums);
   }
 

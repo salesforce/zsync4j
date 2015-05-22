@@ -25,5 +25,5 @@ public class ZsyncMakeTest {
 
     assertEquals(5, ZsyncMake.strongChecksumLength(57323443l, 2048, 2));
   }
-  
+
 }

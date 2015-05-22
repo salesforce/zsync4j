@@ -29,12 +29,12 @@ public class RangeFetcherTest {
     try {
       new RangeFetcher(null);
     } catch (IllegalArgumentException exception) {
-      
+
       // Assert
       assertEquals("httpClient cannot be null", exception.getMessage());
     }
   }
-  
+
   @Test
   public void runtimeExceptionThrownForIoExceptionDuringHttpCommunication() throws Exception {
     // Arrange
@@ -46,17 +46,17 @@ public class RangeFetcherTest {
     Call mockCall = mock(Call.class);
     when(mockCall.execute()).thenThrow(expected);
     when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
-    
+
     // Act
     try {
       new RangeFetcher(mockHttpClient).fetch(url, ranges, mockReceiver);
     } catch (RuntimeException exception) {
-      
+
       // Assert
       assertEquals("Wrong RuntimeException caught", expected, exception.getCause());
     }
   }
-  
+
   @Test
   public void runtimeExceptionThrownForHttpResponsesOtherThan206() throws Exception {
     // Arrange
@@ -65,32 +65,32 @@ public class RangeFetcherTest {
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
     List<Range> ranges = createSomeRanges(1);
     URI url = new URI("someurl");
-    
+
     for (Integer responseToTest : responsesToTest) {
-      
+
       // Arrange some more
       Call mockCall = mock(Call.class);
       Response fakeResponse = fakeResponse(responseToTest);
       when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
       when(mockCall.execute()).thenReturn(fakeResponse);
-      
+
       // Act
       try {
         new RangeFetcher(mockHttpClient).fetch(url, ranges, mockReceiver);
       } catch (RuntimeException exception) {
-        
+
         // Assert
         assertEquals("Http request failed with error code " + responseToTest, exception.getMessage());
       }
     }
-    
+
   }
 
   private Response fakeResponse(int code) {
     Request fakeRequest = new Request.Builder().url("url").build();
     return new Response.Builder().protocol(Protocol.HTTP_2).request(fakeRequest).code(code).build();
   }
-  
+
   private List<Range> createSomeRanges(int numberOfRangesToCreate) {
     List<Range> ranges = new ArrayList<>(numberOfRangesToCreate);
     int rangeStart = 0;

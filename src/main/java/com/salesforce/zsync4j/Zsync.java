@@ -255,7 +255,8 @@ public class Zsync {
    * @throws ZsyncFileNotFoundException
    * @throws OutputFileValidationException
    */
-  public void zsync(URI zsyncFile, Options options, OutputFileListener outputFileListener) throws ZsyncFileNotFoundException, OutputFileValidationException {
+  public void zsync(URI zsyncFile, Options options, OutputFileListener outputFileListener)
+      throws ZsyncFileNotFoundException, OutputFileValidationException {
     final Stopwatch s = Stopwatch.createStarted();
 
     // create copy, since options mutable
@@ -265,23 +266,7 @@ public class Zsync {
       outputFileListener = OutputFileListener.NO_OP;
     }
 
-    // TODO OK to set authenticator for entire client?
-    httpUrlFactory.client().setAuthenticator(new Authenticator() {
-      @Override
-      public Request authenticateProxy(Proxy proxy, Response response) throws IOException {
-        return authenticate(proxy, response);
-      }
-
-      @Override
-      public Request authenticate(Proxy proxy, Response response) throws IOException {
-        final String host = response.request().uri().getHost();
-        final Credentials creds = o.getCredentials().get(host);
-        final Request.Builder b = response.request().newBuilder();
-        if (creds != null)
-          b.header("Authorization", com.squareup.okhttp.Credentials.basic(creds.getUsername(), creds.getPassword()));
-        return b.build();
-      }
-    });
+    setCredentials(o.getCredentials());
 
     final ControlFile controlFile;
     try (InputStream in = new BufferedInputStream(this.toURL(zsyncFile).openStream())) {
@@ -292,16 +277,18 @@ public class Zsync {
       throw new RuntimeException("Failed to read zsync control file", e);
     }
 
-    final Path outputFile = o.getOutputFile() == null ? FileSystems.getDefault().getPath(controlFile.getHeader().getFilename()) : o.getOutputFile();
-    final List<Path> inputFiles = o.getInputFiles();
+    final Path outputFile =
+        o.getOutputFile() == null ? FileSystems.getDefault().getPath(controlFile.getHeader().getFilename()) : o
+            .getOutputFile();
 
     URI remoteFileUri = zsyncFile.resolve(controlFile.getHeader().getUrl());
 
-    outputFileListener.transferStarted(transferStartedEvent(outputFile, remoteFileUri, controlFile.getHeader().getLength()));
+    outputFileListener.transferStarted(transferStartedEvent(outputFile, remoteFileUri, controlFile.getHeader()
+        .getLength()));
 
     Exception exception = null;
     try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, remoteFileUri, outputFileListener)) {
-      if (!processInputFiles(targetFile, controlFile, inputFiles)) {
+      if (!processInputFiles(targetFile, controlFile, o.getInputFiles())) {
         this.fetchRanges(targetFile, remoteFileUri);
       }
     } catch (OutputFileValidationException e) {
@@ -311,13 +298,35 @@ public class Zsync {
       exception = new RuntimeException("Failed to write target file file", e);
       throw (RuntimeException) exception;
     } finally {
-      outputFileListener.transferEnded(transferEndedEvent(outputFile, remoteFileUri, controlFile.getHeader().getLength(), exception));
+      outputFileListener.transferEnded(transferEndedEvent(outputFile, remoteFileUri, controlFile.getHeader()
+          .getLength(), exception));
     }
 
     System.out.println(s.stop());
   }
 
-  static boolean processInputFiles(OutputFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles) throws IOException {
+  // TODO OK to set authenticator for entire client?
+  void setCredentials(final Map<String, ? extends Credentials> credentials) {
+    httpUrlFactory.client().setAuthenticator(new Authenticator() {
+      @Override
+      public Request authenticateProxy(Proxy proxy, Response response) throws IOException {
+        return authenticate(proxy, response);
+      }
+
+      @Override
+      public Request authenticate(Proxy proxy, Response response) throws IOException {
+        final String host = response.request().uri().getHost();
+        final Credentials creds = credentials.get(host);
+        final Request.Builder b = response.request().newBuilder();
+        if (creds != null)
+          b.header("Authorization", com.squareup.okhttp.Credentials.basic(creds.getUsername(), creds.getPassword()));
+        return b.build();
+      }
+    });
+  }
+
+  static boolean processInputFiles(OutputFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles)
+      throws IOException {
     for (Path inputFile : inputFiles) {
       if (processInputFile(targetFile, controlFile, inputFile)) {
         return true;
@@ -329,7 +338,9 @@ public class Zsync {
   static boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile) throws IOException {
     try (final FileChannel channel = FileChannel.open(inputFile)) {
       final BlockMatcher matcher = BlockMatcher.create(controlFile);
-      final RollingBuffer buffer = new RollingBuffer(zeroPad(channel, controlFile.getHeader()), matcher.getMatchBytes(), 16 * matcher.getMatchBytes());
+      final RollingBuffer buffer =
+          new RollingBuffer(zeroPad(channel, controlFile.getHeader()), matcher.getMatchBytes(),
+              16 * matcher.getMatchBytes());
       int bytes;
       do {
         bytes = matcher.match(targetFile, buffer);
@@ -362,7 +373,8 @@ public class Zsync {
 
   private URL toURL(URI uri) throws MalformedURLException {
     final URLStreamHandler handler = this.httpUrlFactory.createURLStreamHandler(uri.getScheme());
-    return handler == null ? uri.toURL() : new URL(uri.getScheme(), uri.getHost(), uri.getPort(), uri.getPath(), handler);
+    return handler == null ? uri.toURL() : new URL(uri.getScheme(), uri.getHost(), uri.getPort(), uri.getPath(),
+        handler);
   }
 
   // this is just a temporary hacked up CLI for testing purposes
@@ -380,7 +392,8 @@ public class Zsync {
         final String auth = args[++i];
         final int eq, cl;
         if ((eq = auth.indexOf('=')) > 0 && (cl = auth.indexOf(':', eq + 1)) > 0) {
-          options.putCredentials(auth.substring(0, eq), new Credentials(auth.substring(eq + 1, cl), auth.substring(cl + 1)));
+          options.putCredentials(auth.substring(0, eq),
+              new Credentials(auth.substring(eq + 1, cl), auth.substring(cl + 1)));
         } else {
           throw new IllegalArgumentException("authenticator must be of form 'hostname=username:password'");
         }

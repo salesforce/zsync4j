@@ -29,7 +29,8 @@ public class ZsyncMakeCompatibilityTest {
     final Path expected = createTempInputFile(name + ".zsync");
     final Path actual = new ZsyncMake().writeToFile(inputFile, new Options().setFilename(name)).getOutputFile();
     try {
-      assertArrayEquals("Generated zsync file does not match expected file", readWithoutMTime(expected), readWithoutMTime(actual));
+      assertArrayEquals("Generated zsync file does not match expected file", readWithoutMTime(expected),
+          readWithoutMTime(actual));
     } finally {
       Files.deleteIfExists(actual);
       Files.deleteIfExists(expected);

@@ -47,7 +47,8 @@ public class Header {
         version = value;
       } else if ("Min-Version".equals(name)) {
         if (value.compareTo(VERSION) > 0)
-          throw new IllegalArgumentException("Zsync version " + VERSION + " does not satisfy min-version requirement " + value);
+          throw new IllegalArgumentException("Zsync version " + VERSION + " does not satisfy min-version requirement "
+              + value);
       } else if ("Length".equals(name)) {
         try {
           length = Long.parseLong(value);
@@ -131,7 +132,8 @@ public class Header {
   private final String url;
   private final String sha1;
 
-  public Header(String version, String filename, Date mtime, int blocksize, long length, int checksumBytes, int rsumBytes, boolean seqMatches, String url, String sha1) {
+  public Header(String version, String filename, Date mtime, int blocksize, long length, int checksumBytes,
+      int rsumBytes, boolean seqMatches, String url, String sha1) {
     this.version = version;
     this.filename = filename;
     this.mtime = mtime;

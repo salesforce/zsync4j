@@ -38,7 +38,8 @@ public class ZsyncMake {
   private static final int BLOCK_SIZE_LARGE = 4096;
 
   @SuppressWarnings("serial")
-  private static final SimpleDateFormat LAST_MODIFIED_TIME_FORMAT = new SimpleDateFormat("EEE, dd MMMMM yyyy HH:mm:ss Z") {
+  private static final SimpleDateFormat LAST_MODIFIED_TIME_FORMAT = new SimpleDateFormat(
+      "EEE, dd MMMMM yyyy HH:mm:ss Z") {
     {
       setTimeZone(TimeZone.getTimeZone("GMT"));
     }
@@ -134,7 +135,8 @@ public class ZsyncMake {
       throw new IllegalArgumentException("outputFile cannot be null");
     }
     if (!outputFile.getFileName().toString().endsWith(".zsync")) {
-      throw new IllegalArgumentException("outputFile's filename must end with .zsync: " + outputFile.getFileName().toString());
+      throw new IllegalArgumentException("outputFile's filename must end with .zsync: "
+          + outputFile.getFileName().toString());
     }
     try (FileOutputStream outputStream = new FileOutputStream(outputFile.toFile())) {
       Result result = this.writeToStream(inputFile, outputStream, options);
@@ -176,7 +178,9 @@ public class ZsyncMake {
     final int weakChecksumLength = weakChecksumLength(fileLength, blockSize, sequenceMatches);
     final int strongChecksumLength = strongChecksumLength(fileLength, blockSize, sequenceMatches);
 
-    final ByteBuffer checksums = computeChecksums(inputFile, blockSize, fileLength, weakChecksumLength, strongChecksumLength, fileDigest, blockDigest);
+    final ByteBuffer checksums =
+        computeChecksums(inputFile, blockSize, fileLength, weakChecksumLength, strongChecksumLength, fileDigest,
+            blockDigest);
 
     // first read sha1 from end of buffer
     final int pos = checksums.capacity() - fileDigest.getDigestLength();
@@ -209,7 +213,9 @@ public class ZsyncMake {
   }
 
   private void writeHeader(WritableByteChannel out, String name, String value) {
-    final String header = new StringBuilder(name.length() + value.length() + 3).append(name).append(": ").append(value).append('\n').toString();
+    final String header =
+        new StringBuilder(name.length() + value.length() + 3).append(name).append(": ").append(value).append('\n')
+            .toString();
     writeHeader(out, header);
   }
 
@@ -233,7 +239,8 @@ public class ZsyncMake {
    *         reading: position at 0 and limit at capacity.
    * @throws IOException
    */
-  private ByteBuffer computeChecksums(final Path inputFile, final int blockSize, final long fileLength, final int weakLen, final int strongLen, MessageDigest fileDigest, MessageDigest blockDigest) {
+  private ByteBuffer computeChecksums(final Path inputFile, final int blockSize, final long fileLength,
+      final int weakLen, final int strongLen, MessageDigest fileDigest, MessageDigest blockDigest) {
     if (weakLen < 1 || weakLen > 4) {
       throw new IllegalArgumentException("weak checksum length must be in interval [1, 4]");
     }
@@ -242,7 +249,9 @@ public class ZsyncMake {
     }
 
     // capacity of buffer is number of blocks times checksum bytes per block
-    final int capacity = ((int) (fileLength / blockSize) + (fileLength % blockSize > 0 ? 1 : 0)) * (weakLen + strongLen) + fileDigest.getDigestLength();
+    final int capacity =
+        ((int) (fileLength / blockSize) + (fileLength % blockSize > 0 ? 1 : 0)) * (weakLen + strongLen)
+            + fileDigest.getDigestLength();
 
     // output buffer: may want to write to disk at certain size
     final ByteBuffer checksums = ByteBuffer.allocate(capacity);
@@ -475,7 +484,8 @@ public class ZsyncMake {
     try {
       return Files.size(inputFile) < 100 * 1 << 20 ? BLOCK_SIZE_SMALL : BLOCK_SIZE_LARGE;
     } catch (IOException exception) {
-      throw new RuntimeException("Error calculating the default block size for file: " + inputFile.getFileName(), exception);
+      throw new RuntimeException("Error calculating the default block size for file: " + inputFile.getFileName(),
+          exception);
     }
   }
 

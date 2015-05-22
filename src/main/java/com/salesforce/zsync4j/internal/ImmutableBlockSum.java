@@ -8,7 +8,8 @@ import com.google.common.collect.ImmutableList;
 
 public class ImmutableBlockSum extends BlockSum {
 
-  public static List<ImmutableBlockSum> readSums(InputStream in, int numBlocks, int rsumBytes, int checksumBytes) throws IOException {
+  public static List<ImmutableBlockSum> readSums(InputStream in, int numBlocks, int rsumBytes, int checksumBytes)
+      throws IOException {
     final ImmutableList.Builder<ImmutableBlockSum> b = ImmutableList.builder();
     for (int i = 0; i < numBlocks; i++)
       b.add(ImmutableBlockSum.read(in, rsumBytes, checksumBytes));

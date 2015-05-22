@@ -25,7 +25,7 @@ public class RangeFetcher {
   public static interface RangeReceiver {
     void receive(Range range, InputStream in) throws IOException;
   }
-  
+
   private static final int MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST = 50;
 
   private final OkHttpClient httpClient;
@@ -43,13 +43,14 @@ public class RangeFetcher {
       fetchInternal(url, rangeChunk, receiver);
     }
   }
-  
+
   private void fetchInternal(URI url, List<Range> ranges, RangeReceiver receiver) {
     final Set<Range> remaining = new LinkedHashSet<>(ranges);
 
     while (!remaining.isEmpty()) {
       // TODO limit ranges sent at once
-      final Request request = new Request.Builder().addHeader("Range", "bytes=" + toString(remaining)).url(url.toString()).build();
+      final Request request =
+          new Request.Builder().addHeader("Range", "bytes=" + toString(remaining)).url(url.toString()).build();
       final Response response;
       try {
         response = httpClient.newCall(request).execute();

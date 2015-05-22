@@ -49,7 +49,8 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final boolean[] completed;
   private int blocksRemaining;
 
-  public OutputFile(Path path, ControlFile controlFile, URI remoteUri, OutputFileListener outputFileListener) throws IOException {
+  public OutputFile(Path path, ControlFile controlFile, URI remoteUri, OutputFileListener outputFileListener)
+      throws IOException {
     this.path = path;
     this.remoteUri = remoteUri;
     this.outputFileListener = outputFileListener;
@@ -153,12 +154,14 @@ public class OutputFile implements RangeReceiver, Closeable {
     do {
       long transferred = this.channel.transferFrom(src, range.first, size);
       remaining -= transferred;
-      this.outputFileListener.bytesDownloaded(bytesDownloadedEvent(this.path, this.remoteUri, this.length, transferred));
+      this.outputFileListener
+          .bytesDownloaded(bytesDownloadedEvent(this.path, this.remoteUri, this.length, transferred));
       this.outputFileListener.bytesWritten(bytesWrittenEvent(this.path, this.remoteUri, this.length, transferred));
     } while (remaining > 0);
 
     final int first = (int) (range.first / this.blockSize);
-    final int last = (int) (range.last + 1 == this.length ? this.completed.length - 1 : (range.last + 1) / this.blockSize - 1);
+    final int last =
+        (int) (range.last + 1 == this.length ? this.completed.length - 1 : (range.last + 1) / this.blockSize - 1);
     for (int i = first; i <= last; i++) {
       if (!this.completed[i]) {
         this.blocksRemaining--;
