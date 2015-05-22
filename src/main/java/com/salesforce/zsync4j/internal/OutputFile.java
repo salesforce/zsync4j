@@ -34,7 +34,11 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final Path path;
   private final URI remoteUri;
   private final Path tempPath;
-  private final Header header;
+
+  private final int blockSize;
+  private final int lastBlockSize;
+  private final long length;
+  private final String sha1;
   private final List<BlockSum> blockSums;
   private final ListMultimap<BlockSum, Integer> positions;
   private final OutputFileListener outputFileListener;
@@ -43,8 +47,7 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final boolean[] completed;
   private int blocksRemaining;
 
-  public OutputFile(Path path, ControlFile controlFile, URI remoteUri, OutputFileListener outputFileListener)
-      throws IOException {
+  public OutputFile(Path path, ControlFile controlFile, URI remoteUri, OutputFileListener outputFileListener) throws IOException {
     this.path = path;
     this.remoteUri = remoteUri;
     this.outputFileListener = outputFileListener;
@@ -52,7 +55,12 @@ public class OutputFile implements RangeReceiver, Closeable {
     mkdirs(path.getParent());
     this.channel = FileChannel.open(this.tempPath, CREATE, WRITE, READ);
 
-    this.header = controlFile.getHeader();
+    final Header header = controlFile.getHeader();
+    this.blockSize = header.getBlocksize();
+    this.length = header.getLength();
+    this.lastBlockSize = (int) (length % blockSize == 0 ? blockSize : length % blockSize);
+    this.sha1 = header.getSha1();
+
     this.blockSums = ImmutableList.copyOf(controlFile.getBlockSums());
     this.positions = indexPositions(this.blockSums);
     this.completed = new boolean[this.blockSums.size()];
@@ -79,19 +87,19 @@ public class OutputFile implements RangeReceiver, Closeable {
     return this.positions.get(sum);
   }
 
-  public boolean write(int position, ReadableByteBuffer data) {
-    return this.write(position, data, 0, data.length());
+  public boolean writeBlock(int position, ReadableByteBuffer data) {
+    return this.writeBlock(position, data, 0);
   }
 
-  public boolean write(int position, ReadableByteBuffer data, int offset, int length) {
+  public boolean writeBlock(int position, ReadableByteBuffer data, int offset) {
     if (this.completed[position]) {
       return false;
     }
+    final int l = position == completed.length - 1 ? this.lastBlockSize : this.blockSize;
     try {
-      this.channel.position(position * this.header.getBlocksize());
-      data.write(this.channel, offset, length);
-      this.outputFileListener.bytesWritten(bytesWrittenEvent(this.path, this.remoteUri, this.header.getLength(), 
-          length));
+      this.channel.position(position * this.blockSize);
+      data.write(this.channel, offset, l);
+      this.outputFileListener.bytesWritten(bytesWrittenEvent(this.path, this.remoteUri, this.length, this.blockSize));
     } catch (IOException e) {
       throw new RuntimeException("Failed to read block at position " + position, e);
     }
@@ -100,24 +108,23 @@ public class OutputFile implements RangeReceiver, Closeable {
   }
 
   public List<Range> getMissingRanges() {
-    final int blockSize = this.header.getBlocksize();
     final ImmutableList.Builder<Range> b = ImmutableList.builder();
     long start = -1;
     for (int i = 0; i < this.completed.length; i++) {
       if (this.completed[i]) {
         // if we're in a range, end it
         if (start != -1) {
-          b.add(new Range(start, i * blockSize - 1));
+          b.add(new Range(start, i * this.blockSize - 1));
           start = -1;
         }
       } else {
         // if we're not in a range, start one
         if (start == -1) {
-          start = i * blockSize;
+          start = i * this.blockSize;
         }
         // if this is the last block in the file map, we need to end the range
         if (i == this.completed.length - 1) {
-          b.add(new Range(start, this.header.getLength() - 1));
+          b.add(new Range(start, this.length - 1));
         }
       }
     }
@@ -130,11 +137,10 @@ public class OutputFile implements RangeReceiver, Closeable {
 
   @Override
   public void receive(Range range, InputStream in) throws IOException {
-    if (range.first % this.header.getBlocksize() != 0) {
+    if (range.first % this.blockSize != 0) {
       throw new RuntimeException("Invalid range received: first byte not block aligned");
     }
-    if ((range.last + 1) % this.header.getBlocksize() != 0
-        && range.last + 1 != this.header.getLength()) {
+    if ((range.last + 1) % this.blockSize != 0 && range.last + 1 != this.length) {
       throw new RuntimeException("Invalid range received: last byte not block aligned");
     }
 
@@ -144,16 +150,12 @@ public class OutputFile implements RangeReceiver, Closeable {
     do {
       long transferred = this.channel.transferFrom(src, range.first, size);
       remaining -= transferred;
-      this.outputFileListener.bytesDownloaded(bytesDownloadedEvent(this.path, this.remoteUri, this.header.getLength(), 
-          transferred));
-      this.outputFileListener.bytesWritten(bytesWrittenEvent(this.path, this.remoteUri, this.header.getLength(), 
-          transferred));
+      this.outputFileListener.bytesDownloaded(bytesDownloadedEvent(this.path, this.remoteUri, this.length, transferred));
+      this.outputFileListener.bytesWritten(bytesWrittenEvent(this.path, this.remoteUri, this.length, transferred));
     } while (remaining > 0);
 
-    final int first = (int) (range.first / this.header.getBlocksize());
-    final int last =
-        (int) (range.last + 1 == this.header.getLength() ? this.completed.length - 1
-            : (range.last + 1) / this.header.getBlocksize() - 1);
+    final int first = (int) (range.first / this.blockSize);
+    final int last = (int) (range.last + 1 == this.length ? this.completed.length - 1 : (range.last + 1) / this.blockSize - 1);
     for (int i = first; i <= last; i++) {
       if (!this.completed[i]) {
         this.blocksRemaining--;
@@ -166,11 +168,10 @@ public class OutputFile implements RangeReceiver, Closeable {
   public void close() throws IOException {
     try {
       if (!this.isComplete()) {
-        throw new OutputFileValidationException("Target incomplete: missing ranges: "
-            + this.getMissingRanges());
+        throw new OutputFileValidationException("Target incomplete: missing ranges: " + this.getMissingRanges());
       }
       this.channel.position(0); // reset channel to beginning to compute full SHA1
-      if (!this.header.getSha1().equals(ZsyncUtil.computeSha1(this.channel))) {
+      if (!this.sha1.equals(ZsyncUtil.computeSha1(this.channel))) {
         throw new OutputFileValidationException("Target file sha1 does not match expected");
       }
     } finally {

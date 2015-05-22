@@ -94,7 +94,7 @@ public class RollingBuffer implements ReadableByteBuffer {
   }
 
   boolean ensureBuffered(int needed) throws IOException {
-    if (buffer.remaining() - length - needed < length) {
+    if (buffer.remaining() < length + needed) {
       // reached end of file last time: can't read more
       if (buffer.capacity() != buffer.limit())
         return false;
@@ -102,7 +102,7 @@ public class RollingBuffer implements ReadableByteBuffer {
       buffer.compact();
       fill();
       // check that we now have enough bytes
-      if (buffer.remaining() - length - needed < length)
+      if (buffer.remaining() < length + needed)
         return false;
     }
     return true;

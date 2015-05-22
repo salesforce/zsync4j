@@ -63,7 +63,7 @@ public class SingleBlockMatcher extends BlockMatcher {
       final List<Integer> matches = targetFile.getPositions(blockSum);
       if (!matches.isEmpty()) {
         for (Integer position : matches)
-          targetFile.write(position, buffer);
+          targetFile.writeBlock(position, buffer);
         state = MATCHED;
         return blockSize;
       }

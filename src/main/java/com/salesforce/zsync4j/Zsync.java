@@ -1,6 +1,7 @@
 package com.salesforce.zsync4j;
 
-import static com.salesforce.zsync4j.OutputFileListener.OutputFileEvent.*;
+import static com.salesforce.zsync4j.OutputFileListener.OutputFileEvent.transferEndedEvent;
+import static com.salesforce.zsync4j.OutputFileListener.OutputFileEvent.transferStartedEvent;
 
 import java.io.BufferedInputStream;
 import java.io.FileNotFoundException;
@@ -12,6 +13,7 @@ import java.net.URI;
 import java.net.URL;
 import java.net.URLStreamHandler;
 import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -22,14 +24,15 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.base.Stopwatch;
-import com.salesforce.zsync4j.OutputFileListener.OutputFileEvent;
 import com.salesforce.zsync4j.Zsync.Options.Credentials;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ControlFile;
+import com.salesforce.zsync4j.internal.Header;
 import com.salesforce.zsync4j.internal.OutputFile;
 import com.salesforce.zsync4j.internal.Range;
 import com.salesforce.zsync4j.internal.util.RangeFetcher;
 import com.salesforce.zsync4j.internal.util.RollingBuffer;
+import com.salesforce.zsync4j.internal.util.ZeroPaddedReadableByteChannel;
 import com.squareup.okhttp.Authenticator;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.OkUrlFactory;
@@ -294,8 +297,7 @@ public class Zsync {
 
     URI remoteFileUri = zsyncFile.resolve(controlFile.getHeader().getUrl());
 
-    outputFileListener.transferStarted(transferStartedEvent(outputFile, remoteFileUri, 
-        controlFile.getHeader().getLength()));
+    outputFileListener.transferStarted(transferStartedEvent(outputFile, remoteFileUri, controlFile.getHeader().getLength()));
 
     Exception exception = null;
     try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, remoteFileUri, outputFileListener)) {
@@ -309,8 +311,7 @@ public class Zsync {
       exception = new RuntimeException("Failed to write target file file", e);
       throw (RuntimeException) exception;
     } finally {
-      outputFileListener.transferEnded(transferEndedEvent(outputFile, remoteFileUri, 
-          controlFile.getHeader().getLength(), exception));
+      outputFileListener.transferEnded(transferEndedEvent(outputFile, remoteFileUri, controlFile.getHeader().getLength(), exception));
     }
 
     System.out.println(s.stop());
@@ -326,16 +327,28 @@ public class Zsync {
   }
 
   static boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile) throws IOException {
-    // TODO pad end of input file
     try (final FileChannel channel = FileChannel.open(inputFile)) {
       final BlockMatcher matcher = BlockMatcher.create(controlFile);
-      final RollingBuffer buffer = new RollingBuffer(channel, matcher.getMatchBytes(), 16 * matcher.getMatchBytes());
+      final RollingBuffer buffer = new RollingBuffer(zeroPad(channel, controlFile.getHeader()), matcher.getMatchBytes(), 16 * matcher.getMatchBytes());
       int bytes;
       do {
         bytes = matcher.match(targetFile, buffer);
       } while (buffer.advance(bytes));
     }
     return targetFile.isComplete();
+  }
+
+  /**
+   * Pads the given channel with zeros if the length of the input file is not evenly divisible by
+   * the block size. The is necessary to match how the checksums in the zsync file are computed.
+   *
+   * @param channel channel for input file to pad
+   * @param header header of the zsync file being processed.
+   * @return
+   */
+  static ReadableByteChannel zeroPad(ReadableByteChannel channel, Header header) {
+    final int r = (int) (header.getLength() % header.getBlocksize());
+    return r == 0 ? channel : new ZeroPaddedReadableByteChannel(channel, header.getBlocksize() - r);
   }
 
   void fetchRanges(OutputFile targetFile, URI url) {

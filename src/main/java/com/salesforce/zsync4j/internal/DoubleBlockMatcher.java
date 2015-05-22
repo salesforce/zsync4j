@@ -105,9 +105,6 @@ public class DoubleBlockMatcher extends BlockMatcher {
         currentBlockSum.checksum.setChecksum(nextBlockSum.checksum);
         nextBlockSum.rsum.init(buffer, blockSize, blockSize);
         nextBlockSum.checksum.unset();
-        // write out this block where it matched last (position incremented)
-        for (int p : matches)
-          outputFile.write(++p, buffer, 0, blockSize);
         // now try to find where current and next match (may overlap with previous matches)
         matches = tryMatchNext(outputFile, buffer);
         return matches.isEmpty() ? matchedFirst() : matchedBoth(outputFile, buffer);
@@ -128,8 +125,10 @@ public class DoubleBlockMatcher extends BlockMatcher {
   }
 
   private int matchedBoth(OutputFile outputFile, ReadableByteBuffer buffer) {
-    for (int p : matches)
-      outputFile.write(p, buffer, 0, blockSize);
+    for (int p : matches) {
+      outputFile.writeBlock(p, buffer, 0);
+      outputFile.writeBlock(p + 1, buffer, this.blockSize);
+    }
     state = MATCHED_BOTH;
     return blockSize;
   }
