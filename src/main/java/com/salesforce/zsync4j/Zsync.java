@@ -266,7 +266,7 @@ public class Zsync {
       outputFileListener = OutputFileListener.NO_OP;
     }
 
-    setCredentials(o.getCredentials());
+    this.setCredentials(o.getCredentials());
 
     final ControlFile controlFile;
     try (InputStream in = new BufferedInputStream(this.toURL(zsyncFile).openStream())) {
@@ -307,10 +307,10 @@ public class Zsync {
 
   // TODO OK to set authenticator for entire client?
   void setCredentials(final Map<String, ? extends Credentials> credentials) {
-    httpUrlFactory.client().setAuthenticator(new Authenticator() {
+    this.httpUrlFactory.client().setAuthenticator(new Authenticator() {
       @Override
       public Request authenticateProxy(Proxy proxy, Response response) throws IOException {
-        return authenticate(proxy, response);
+        return this.authenticate(proxy, response);
       }
 
       @Override
@@ -318,8 +318,9 @@ public class Zsync {
         final String host = response.request().uri().getHost();
         final Credentials creds = credentials.get(host);
         final Request.Builder b = response.request().newBuilder();
-        if (creds != null)
+        if (creds != null) {
           b.header("Authorization", com.squareup.okhttp.Credentials.basic(creds.getUsername(), creds.getPassword()));
+        }
         return b.build();
       }
     });
@@ -379,11 +380,13 @@ public class Zsync {
 
   // this is just a temporary hacked up CLI for testing purposes
   public static void main(String[] args) throws IOException, ZsyncFileNotFoundException {
-    if (args.length == 0)
+    if (args.length == 0) {
       throw new IllegalArgumentException("Must specify at least zsync file url");
+    }
 
-    if (args.length % 2 == 0)
+    if (args.length % 2 == 0) {
       throw new IllegalArgumentException("Must specify pairs of args");
+    }
 
     final FileSystem fs = FileSystems.getDefault();
     final Options options = new Options();
@@ -412,12 +415,12 @@ public class Zsync {
 
       @Override
       public void transferStarted(OutputFileEvent event) {
-        total.set(event.getRemoteFileSizeInBytes());
+        this.total.set(event.getRemoteFileSizeInBytes());
       }
 
       @Override
       public void bytesDownloaded(OutputFileEvent event) {
-        dl.addAndGet(event.getBytesDownloaded());
+        this.dl.addAndGet(event.getBytesDownloaded());
       }
 
       @Override
@@ -425,7 +428,8 @@ public class Zsync {
 
       @Override
       public void transferEnded(OutputFileEvent event) {
-        System.out.println("Downloaded " + (dl.get() / 1024 / 1024) + "MB of " + (total.get() / 1024 / 1024) + " MB");
+        System.out.println("Downloaded " + (this.dl.get() / 1024 / 1024) + "MB of " + (this.total.get() / 1024 / 1024)
+            + " MB");
       }
     };
 

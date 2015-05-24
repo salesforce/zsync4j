@@ -61,7 +61,7 @@ public class OutputFile implements RangeReceiver, Closeable {
     final Header header = controlFile.getHeader();
     this.blockSize = header.getBlocksize();
     this.length = header.getLength();
-    this.lastBlockSize = (int) (length % blockSize == 0 ? blockSize : length % blockSize);
+    this.lastBlockSize = (int) (this.length % this.blockSize == 0 ? this.blockSize : this.length % this.blockSize);
     this.sha1 = header.getSha1();
     this.mtime = header.getMtime().getTime();
 
@@ -99,7 +99,7 @@ public class OutputFile implements RangeReceiver, Closeable {
     if (this.completed[position]) {
       return false;
     }
-    final int l = position == completed.length - 1 ? this.lastBlockSize : this.blockSize;
+    final int l = position == this.completed.length - 1 ? this.lastBlockSize : this.blockSize;
     try {
       this.channel.position(position * this.blockSize);
       data.write(this.channel, offset, l);
@@ -184,6 +184,6 @@ public class OutputFile implements RangeReceiver, Closeable {
       this.channel.close();
     }
     Files.move(this.tempPath, this.path, REPLACE_EXISTING, REPLACE_EXISTING);
-    Files.setLastModifiedTime(this.path, fromMillis(mtime));
+    Files.setLastModifiedTime(this.path, fromMillis(this.mtime));
   }
 }

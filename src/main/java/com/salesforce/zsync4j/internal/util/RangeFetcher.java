@@ -40,7 +40,7 @@ public class RangeFetcher {
   public void fetch(URI url, List<Range> allRanges, RangeReceiver receiver) {
     List<List<Range>> chunkedRanges = Lists.partition(allRanges, MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST);
     for (List<Range> rangeChunk : chunkedRanges) {
-      fetchInternal(url, rangeChunk, receiver);
+      this.fetchInternal(url, rangeChunk, receiver);
     }
   }
 
@@ -53,7 +53,7 @@ public class RangeFetcher {
           new Request.Builder().addHeader("Range", "bytes=" + toString(remaining)).url(url.toString()).build();
       final Response response;
       try {
-        response = httpClient.newCall(request).execute();
+        response = this.httpClient.newCall(request).execute();
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -61,13 +61,15 @@ public class RangeFetcher {
       switch (response.code()) {
         case 206:
           break;
+        // TODO - Need to think about how we want to handle a 200
         default:
           throw new RuntimeException("Http request failed with error code " + response.code());
       }
 
       final String contentType = response.header("Content-Type");
-      if (contentType == null)
+      if (contentType == null) {
         throw new RuntimeException("Missing Content-Type header");
+      }
       final MediaType mediaType = MediaType.parse(contentType);
 
       if ("multipart".equals(mediaType.type())) {
@@ -75,11 +77,12 @@ public class RangeFetcher {
 
         try (InputStream in = new BufferedInputStream(response.body().byteStream())) {
           Range range;
-          while ((range = nextPart(in, boundary)) != null) {
+          while ((range = this.nextPart(in, boundary)) != null) {
             // technically it's OK for server to combine or re-order ranges. However, since we
             // already combine and sort ranges, this should not happen
-            if (!remaining.remove(range))
+            if (!remaining.remove(range)) {
               throw new RuntimeException("Received range " + range + " not one of requested " + remaining);
+            }
             final InputStream part = ByteStreams.limit(in, range.size());
             receiver.receive(range, part);
           }
@@ -88,11 +91,13 @@ public class RangeFetcher {
         }
       } else {
         final String contentRange = response.header("Content-Range");
-        if (contentRange == null)
+        if (contentRange == null) {
           throw new RuntimeException("Content-Range header missing");
+        }
         final Range range = parseContentRange(contentRange);
-        if (!remaining.remove(range))
+        if (!remaining.remove(range)) {
           throw new RuntimeException("Received range " + range + " not one of requested " + remaining);
+        }
         try {
           receiver.receive(range, response.body().byteStream());
         } catch (IOException e) {
@@ -103,32 +108,39 @@ public class RangeFetcher {
   }
 
   private Range nextPart(InputStream in, byte[] boundary) throws IOException {
-    if (!(in.read() == '\r' && in.read() == '\n' && in.read() == '-' && in.read() == '-'))
+    if (!(in.read() == '\r' && in.read() == '\n' && in.read() == '-' && in.read() == '-')) {
       throw new RuntimeException("Expected part being not matched");
+    }
     final byte[] b = new byte[boundary.length];
     int read = 0, r;
-    while (read < b.length && (r = in.read(b, read, b.length - read)) != -1)
+    while (read < b.length && (r = in.read(b, read, b.length - read)) != -1) {
       read += r;
-    if (read != b.length || !Arrays.equals(boundary, b))
+    }
+    if (read != b.length || !Arrays.equals(boundary, b)) {
       throw new RuntimeException("Invalid multipart boundary");
+    }
     final int r1 = in.read();
     final int r2 = in.read();
     if (r1 == '-' && r2 == '-') {
-      if (!(in.read() == '\r' && in.read() == '\n' && in.read() == -1))
+      if (!(in.read() == '\r' && in.read() == '\n' && in.read() == -1)) {
         throw new RuntimeException("unexpected end of body");
+      }
       return null;
-    } else if (!(r1 == '\r' && r2 == '\n'))
+    } else if (!(r1 == '\r' && r2 == '\n')) {
       throw new RuntimeException("Missing control line feed");
+    }
 
     Range range = null;
     String header;
     while ((header = readHeader(in)) != null) {
       if (header.startsWith("Content-Range")) {
-        if (range != null)
+        if (range != null) {
           throw new RuntimeException("Multiple content range headers in multipart");
+        }
         int idx = header.indexOf(':');
-        if (idx == -1)
+        if (idx == -1) {
           throw new RuntimeException("Invalid Content-Range header " + header + " in multipart");
+        }
         range = parseContentRange(header.substring(idx + 2));
       }
     }
@@ -141,10 +153,12 @@ public class RangeFetcher {
     byte prev = -1;
     int read;
     while ((read = in.read()) != -1) {
-      if (prev == '\r' && read == '\n')
+      if (prev == '\r' && read == '\n') {
         return pos == 1 ? null : new String(buf, 0, pos - 1, ISO_8859_1);
-      if (pos == buf.length)
+      }
+      if (pos == buf.length) {
         buf = Arrays.copyOf(buf, buf.length * 2);
+      }
       prev = (byte) read;
       buf[pos++] = prev;
     }
@@ -152,41 +166,49 @@ public class RangeFetcher {
   }
 
   static byte[] getBoundary(final MediaType mediaType) {
-    if (!"byteranges".equals(mediaType.subtype()))
+    if (!"byteranges".equals(mediaType.subtype())) {
       throw new RuntimeException("Invalid multipart subtype " + mediaType.subtype());
+    }
     final List<String> value = mediaType.parameters().get("boundary");
-    if (value == null || value.isEmpty())
+    if (value == null || value.isEmpty()) {
       throw new RuntimeException("Missing multipart boundary parameter");
+    }
     final byte[] boundary = value.get(0).getBytes(ISO_8859_1);
     return boundary;
   }
 
   static String toString(final Iterable<? extends Range> ranges) {
     final Iterator<? extends Range> it = ranges.iterator();
-    if (!it.hasNext())
+    if (!it.hasNext()) {
       throw new RuntimeException("no ranges");
+    }
     final StringBuilder b = new StringBuilder(it.next().toString());
-    while (it.hasNext())
+    while (it.hasNext()) {
       b.append(",").append(it.next().toString());
+    }
     return b.toString();
   }
 
   static Range parseContentRange(String value) {
     final String prefix = "bytes ";
-    if (!value.startsWith(prefix))
+    if (!value.startsWith(prefix)) {
       throw new IllegalArgumentException("Invalid Content-Range value " + value);
+    }
     final int idx = value.indexOf('-', prefix.length());
-    if (idx == 0)
+    if (idx == 0) {
       throw new IllegalArgumentException("Invalid Content-Range value " + value);
+    }
     final long first = Long.parseLong(value.substring(prefix.length(), idx));
     final int dash = value.indexOf('/', idx);
-    if (idx == 0)
+    if (idx == 0) {
       throw new IllegalArgumentException("Invalid Content-Range value " + value);
+    }
     final long last = Long.parseLong(value.substring(idx + 1, dash));
     final Range range = new Range(first, last);
     final long size = Long.parseLong(value.substring(dash + 1));
-    if (size != range.size())
+    if (size != range.size()) {
       throw new IllegalArgumentException("Invalid Content-Range size " + value);
+    }
     return range;
   }
 }
