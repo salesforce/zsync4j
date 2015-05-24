@@ -39,8 +39,9 @@ public class DoubleBlockMatcher extends BlockMatcher {
 
     this.state = INIT;
     final MessageDigest digest = ZsyncUtil.newMD4();
-    this.currentBlockSum = new MutableBlockSum(digest, blockSize, header.getRsumBytes(), header.getChecksumBytes());
-    this.nextBlockSum = new MutableBlockSum(digest, blockSize, header.getRsumBytes(), header.getChecksumBytes());
+    this.currentBlockSum =
+        new MutableBlockSum(digest, this.blockSize, header.getRsumBytes(), header.getChecksumBytes());
+    this.nextBlockSum = new MutableBlockSum(digest, this.blockSize, header.getRsumBytes(), header.getChecksumBytes());
     this.rsumHashSet = computeRsumHashSet(controlFile.getBlockSums());
   }
 
@@ -60,87 +61,87 @@ public class DoubleBlockMatcher extends BlockMatcher {
 
   @Override
   public int getMatchBytes() {
-    return 2 * blockSize;
+    return 2 * this.blockSize;
   }
 
   @Override
   public int match(OutputFile outputFile, ReadableByteBuffer buffer) {
-    switch (state) {
+    switch (this.state) {
       case INIT:
         // initially we have to compute the rsum from scratch for both blocks
-        currentBlockSum.rsum.init(buffer, 0, blockSize);
-        nextBlockSum.rsum.init(buffer, blockSize, blockSize);
-        matches = tryMatchBoth(outputFile, buffer);
-        return matches.isEmpty() ? missed(buffer) : matchedBoth(outputFile, buffer);
+        this.currentBlockSum.rsum.init(buffer, 0, this.blockSize);
+        this.nextBlockSum.rsum.init(buffer, this.blockSize, this.blockSize);
+        this.matches = this.tryMatchBoth(outputFile, buffer);
+        return this.matches.isEmpty() ? this.missed(buffer) : this.matchedBoth(outputFile, buffer);
       case MISSED:
         // if we missed last time, update rolling sums by one byte and reset checksums
-        final byte newByte = buffer.get(blockSize - 1);
-        currentBlockSum.rsum.update(firstByte, newByte);
-        currentBlockSum.checksum.unset();
-        nextBlockSum.rsum.update(newByte, buffer.get(buffer.length() - 1));
-        nextBlockSum.checksum.unset();
-        matches = tryMatchBoth(outputFile, buffer);
-        return matches.isEmpty() ? missed(buffer) : matchedBoth(outputFile, buffer);
+        final byte newByte = buffer.get(this.blockSize - 1);
+        this.currentBlockSum.rsum.update(this.firstByte, newByte);
+        this.currentBlockSum.checksum.unset();
+        this.nextBlockSum.rsum.update(newByte, buffer.get(buffer.length() - 1));
+        this.nextBlockSum.checksum.unset();
+        this.matches = this.tryMatchBoth(outputFile, buffer);
+        return this.matches.isEmpty() ? this.missed(buffer) : this.matchedBoth(outputFile, buffer);
       case MATCHED_FIRST:
         // if we matched the first block last time, reuse rolling sum for current block
-        currentBlockSum.rsum.init(nextBlockSum.rsum);
-        nextBlockSum.rsum.init(buffer, blockSize, blockSize);
+        this.currentBlockSum.rsum.init(this.nextBlockSum.rsum);
+        this.nextBlockSum.rsum.init(buffer, this.blockSize, this.blockSize);
         // We will have computed the checksum for the current block if rolling sum check passed
         // If so, reuse the checksum to lookup the block directly and try to match successors
-        if (nextBlockSum.checksum.isSet()) {
-          currentBlockSum.checksum.setChecksum(nextBlockSum.checksum);
-          nextBlockSum.checksum.unset();
-          matches = tryMatchNext(outputFile, buffer);
+        if (this.nextBlockSum.checksum.isSet()) {
+          this.currentBlockSum.checksum.setChecksum(this.nextBlockSum.checksum);
+          this.nextBlockSum.checksum.unset();
+          this.matches = this.tryMatchNext(outputFile, buffer);
         }
         // Otherwise, try to match a double block based on the combined rolling sum
         else {
-          currentBlockSum.checksum.unset();
-          nextBlockSum.checksum.unset();
-          matches = tryMatchBoth(outputFile, buffer);
+          this.currentBlockSum.checksum.unset();
+          this.nextBlockSum.checksum.unset();
+          this.matches = this.tryMatchBoth(outputFile, buffer);
         }
-        return matches.isEmpty() ? missed(buffer) : matchedBoth(outputFile, buffer);
+        return this.matches.isEmpty() ? this.missed(buffer) : this.matchedBoth(outputFile, buffer);
       case MATCHED_BOTH:
         // if we matched both blocks last time, reuse rolling sum and checksum for current block
-        currentBlockSum.rsum.init(nextBlockSum.rsum);
-        currentBlockSum.checksum.setChecksum(nextBlockSum.checksum);
-        nextBlockSum.rsum.init(buffer, blockSize, blockSize);
-        nextBlockSum.checksum.unset();
+        this.currentBlockSum.rsum.init(this.nextBlockSum.rsum);
+        this.currentBlockSum.checksum.setChecksum(this.nextBlockSum.checksum);
+        this.nextBlockSum.rsum.init(buffer, this.blockSize, this.blockSize);
+        this.nextBlockSum.checksum.unset();
         // now try to find where current and next match (may overlap with previous matches)
-        matches = tryMatchNext(outputFile, buffer);
-        return matches.isEmpty() ? matchedFirst() : matchedBoth(outputFile, buffer);
+        this.matches = this.tryMatchNext(outputFile, buffer);
+        return this.matches.isEmpty() ? this.matchedFirst() : this.matchedBoth(outputFile, buffer);
       default:
         throw new RuntimeException("unmatched state");
     }
   }
 
   private int missed(ReadableByteBuffer buffer) {
-    state = MISSED;
-    firstByte = buffer.get(0);
+    this.state = MISSED;
+    this.firstByte = buffer.get(0);
     return 1;
   }
 
   private int matchedFirst() {
-    state = MATCHED_FIRST;
-    return blockSize;
+    this.state = MATCHED_FIRST;
+    return this.blockSize;
   }
 
   private int matchedBoth(OutputFile outputFile, ReadableByteBuffer buffer) {
-    for (int p : matches) {
+    for (int p : this.matches) {
       outputFile.writeBlock(p, buffer, 0);
       outputFile.writeBlock(p + 1, buffer, this.blockSize);
     }
-    state = MATCHED_BOTH;
-    return blockSize;
+    this.state = MATCHED_BOTH;
+    return this.blockSize;
   }
 
   private List<Integer> tryMatchBoth(final OutputFile outputFile, final ReadableByteBuffer buffer) {
     final List<Integer> matches;
-    final Long r = toLong(currentBlockSum.rsum.toInt(), nextBlockSum.rsum.toInt());
+    final Long r = toLong(this.currentBlockSum.rsum.toInt(), this.nextBlockSum.rsum.toInt());
     // cheap negative check followed by more expensive check
-    if (rsumHashSet.contains(r)) {
+    if (this.rsumHashSet.contains(r)) {
       // need to compute current block sum
-      currentBlockSum.checksum.setChecksum(buffer, 0, blockSize);
-      matches = tryMatchNext(outputFile, buffer);
+      this.currentBlockSum.checksum.setChecksum(buffer, 0, this.blockSize);
+      matches = this.tryMatchNext(outputFile, buffer);
     } else {
       matches = Collections.emptyList();
     }
@@ -148,33 +149,36 @@ public class DoubleBlockMatcher extends BlockMatcher {
   }
 
   private List<Integer> tryMatchNext(final OutputFile outputFile, final ReadableByteBuffer buffer) {
-    final List<Integer> positions = outputFile.getPositions(currentBlockSum);
-    return positions.isEmpty() ? Collections.<Integer>emptyList() : filterMatches(outputFile, buffer, positions);
+    final List<Integer> positions = outputFile.getPositions(this.currentBlockSum);
+    return positions.isEmpty() ? Collections.<Integer>emptyList() : this.filterMatches(outputFile, buffer, positions);
   }
 
   private List<Integer> filterMatches(final OutputFile outputFile, ReadableByteBuffer buffer, List<Integer> positions) {
     // optimize common case
     if (positions.size() == 1) {
-      return isNextMatch(outputFile, buffer, positions.get(0)) ? positions : Collections.<Integer>emptyList();
+      return this.isNextMatch(outputFile, buffer, positions.get(0)) ? positions : Collections.<Integer>emptyList();
     } else {
       final ImmutableList.Builder<Integer> b = ImmutableList.builder();
-      for (Integer position : positions)
-        if (isNextMatch(outputFile, buffer, position))
+      for (Integer position : positions) {
+        if (this.isNextMatch(outputFile, buffer, position)) {
           b.add(position);
+        }
+      }
       return b.build();
     }
   }
 
   private boolean isNextMatch(OutputFile outputFile, ReadableByteBuffer buffer, Integer position) {
     final Integer next = position + 1;
-    if (next == outputFile.getNumBlocks())
+    if (next == outputFile.getNumBlocks()) {
       return true;
     final BlockSum nextTargetBlock = outputFile.get(next);
     if (nextTargetBlock.getRsum() == nextBlockSum.rsum.toInt()) {
       // compute next block sum only once
-      if (!nextBlockSum.checksum.isSet())
-        nextBlockSum.checksum.setChecksum(buffer, blockSize, blockSize);
-      return nextTargetBlock.equals(nextBlockSum);
+      if (!this.nextBlockSum.checksum.isSet()) {
+        this.nextBlockSum.checksum.setChecksum(buffer, this.blockSize, this.blockSize);
+      }
+      return nextTargetBlock.equals(this.nextBlockSum);
     }
     return false;
   }

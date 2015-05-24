@@ -8,12 +8,12 @@ import com.salesforce.zsync4j.internal.util.SplitInputStream;
 
 public class ControlFile {
 
-  public static ControlFile read(final InputStream in) throws IOException {
+  public static ControlFile read(final InputStream in, EventManager events) throws IOException {
     final SplitInputStream firstPart = new SplitInputStream(in, new byte[] {'\n', '\n'});
-    final Header header = Header.read(firstPart);
+    final Header header = Header.read(firstPart, events);
     final List<? extends BlockSum> blockSums =
         ImmutableBlockSum.readSums(firstPart.next(), header.getNumBlocks(), header.getRsumBytes(),
-            header.getChecksumBytes());
+            header.getChecksumBytes(), events);
     return new ControlFile(header, blockSums);
   }
 
@@ -27,11 +27,11 @@ public class ControlFile {
   }
 
   public Header getHeader() {
-    return header;
+    return this.header;
   }
 
   public List<? extends BlockSum> getBlockSums() {
-    return blockSums;
+    return this.blockSums;
   }
 
 }

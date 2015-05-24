@@ -1,7 +1,5 @@
 package com.salesforce.zsync4j.internal;
 
-import static com.salesforce.zsync4j.OutputFileListener.OutputFileEvent.bytesDownloadedEvent;
-import static com.salesforce.zsync4j.OutputFileListener.OutputFileEvent.bytesWrittenEvent;
 import static com.salesforce.zsync4j.internal.util.ZsyncUtil.mkdirs;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -12,7 +10,6 @@ import static java.nio.file.attribute.FileTime.fromMillis;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
@@ -24,7 +21,6 @@ import java.util.List;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
-import com.salesforce.zsync4j.OutputFileListener;
 import com.salesforce.zsync4j.OutputFileValidationException;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
 import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
@@ -34,7 +30,6 @@ public class OutputFile implements RangeReceiver, Closeable {
 
   // immutable state
   private final Path path;
-  private final URI remoteUri;
   private final Path tempPath;
 
   private final int blockSize;
@@ -44,17 +39,15 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final long mtime;
   private final List<BlockSum> blockSums;
   private final ListMultimap<BlockSum, Integer> positions;
-  private final OutputFileListener outputFileListener;
   // mutable state
   private final FileChannel channel;
   private final boolean[] completed;
   private int blocksRemaining;
+  private EventManager events;
 
-  public OutputFile(Path path, ControlFile controlFile, URI remoteUri, OutputFileListener outputFileListener)
-      throws IOException {
+  public OutputFile(Path path, ControlFile controlFile, EventManager events) throws IOException {
     this.path = path;
-    this.remoteUri = remoteUri;
-    this.outputFileListener = outputFileListener;
+    this.events = events;
     this.tempPath =
         path.getParent() == null ? Paths.get(path.getFileName().toString() + ".part") : path.getParent().resolve(
             path.getFileName().toString() + ".part");
@@ -108,7 +101,7 @@ public class OutputFile implements RangeReceiver, Closeable {
     try {
       this.channel.position(position * this.blockSize);
       data.write(this.channel, offset, l);
-      this.outputFileListener.bytesWritten(bytesWrittenEvent(this.path, this.remoteUri, this.length, this.blockSize));
+      this.events.bytesWritten(this.tempPath, l);
     } catch (IOException e) {
       throw new RuntimeException("Failed to read block at position " + position, e);
     }
@@ -159,9 +152,8 @@ public class OutputFile implements RangeReceiver, Closeable {
     do {
       long transferred = this.channel.transferFrom(src, range.first, size);
       remaining -= transferred;
-      this.outputFileListener
-          .bytesDownloaded(bytesDownloadedEvent(this.path, this.remoteUri, this.length, transferred));
-      this.outputFileListener.bytesWritten(bytesWrittenEvent(this.path, this.remoteUri, this.length, transferred));
+      this.events.bytesDownloaded(transferred);
+      this.events.bytesWritten(this.tempPath, transferred);
     } while (remaining > 0);
 
     final int first = (int) (range.first / this.blockSize);
@@ -182,13 +174,18 @@ public class OutputFile implements RangeReceiver, Closeable {
         throw new OutputFileValidationException("Target incomplete: missing ranges: " + this.getMissingRanges());
       }
       this.channel.position(0); // reset channel to beginning to compute full SHA1
-      if (!this.sha1.equals(ZsyncUtil.computeSha1(this.channel))) {
+      this.events.sha1CalculationStarted(this.tempPath);
+      String calculatedSha1 = ZsyncUtil.computeSha1(this.channel);
+      this.events.sha1CalculationComplete(calculatedSha1);
+      if (!this.sha1.equals(calculatedSha1)) {
         throw new OutputFileValidationException("Target file sha1 does not match expected");
       }
     } finally {
       this.channel.close();
     }
+    this.events.moveTempFileStarted(this.tempPath, this.path);
     Files.move(this.tempPath, this.path, REPLACE_EXISTING, REPLACE_EXISTING);
     Files.setLastModifiedTime(this.path, fromMillis(this.mtime));
+    this.events.moveTempFileComplete();
   }
 }

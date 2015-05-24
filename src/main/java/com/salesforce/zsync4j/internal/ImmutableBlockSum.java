@@ -8,37 +8,44 @@ import com.google.common.collect.ImmutableList;
 
 public class ImmutableBlockSum extends BlockSum {
 
-  public static List<ImmutableBlockSum> readSums(InputStream in, int numBlocks, int rsumBytes, int checksumBytes)
-      throws IOException {
+  public static List<ImmutableBlockSum> readSums(InputStream in, int numBlocks, int rsumBytes, int checksumBytes,
+      EventManager events) throws IOException {
     final ImmutableList.Builder<ImmutableBlockSum> b = ImmutableList.builder();
-    for (int i = 0; i < numBlocks; i++)
-      b.add(ImmutableBlockSum.read(in, rsumBytes, checksumBytes));
+    for (int i = 0; i < numBlocks; i++) {
+      b.add(ImmutableBlockSum.read(in, rsumBytes, checksumBytes, events));
+    }
     return b.build();
   }
 
-  public static ImmutableBlockSum read(InputStream in, int rsumBytes, int checksumBytes) throws IOException {
-    return new ImmutableBlockSum(readRsum(in, rsumBytes), readChecksum(in, checksumBytes));
+  public static ImmutableBlockSum read(InputStream in, int rsumBytes, int checksumBytes, EventManager events)
+      throws IOException {
+    return new ImmutableBlockSum(readRsum(in, rsumBytes, events), readChecksum(in, checksumBytes, events));
   }
 
-  static int readRsum(InputStream in, int rsumBytes) throws IOException {
+  static int readRsum(InputStream in, int rsumBytes, EventManager events) throws IOException {
     int rsum = 0;
     for (int i = rsumBytes - 1; i >= 0; i--) {
       int next = in.read();
-      if (next == -1)
+      events.bytesDownloaded(1);
+      if (next == -1) {
         throw new IllegalArgumentException("Failed to read rsum: premature end of file");
+      }
       rsum |= next << (i * 8);
     }
     return rsum;
   }
 
-  static byte[] readChecksum(InputStream in, int len) throws IOException {
+  static byte[] readChecksum(InputStream in, int len, EventManager events) throws IOException {
     final byte[] b = new byte[len];
     int read = 0;
     int r;
-    while (read < len && (r = in.read(b, read, len - read)) != -1)
+    while (read < len && (r = in.read(b, read, len - read)) != -1) {
+      events.bytesDownloaded(r);
       read += r;
-    if (read != b.length)
+    }
+    if (read != b.length) {
       throw new IOException("Failed to read block checksums");
+    }
     return b;
   }
 
@@ -55,23 +62,24 @@ public class ImmutableBlockSum extends BlockSum {
 
   @Override
   int getRsum() {
-    return rsum;
+    return this.rsum;
   }
 
   @Override
   byte[] getChecksum() {
-    return checksum;
+    return this.checksum;
   }
 
   @Override
   int getChecksumLength() {
-    return checksum.length;
+    return this.checksum.length;
   }
 
   @Override
   public int hashCode() {
-    if (hashCode == null)
-      hashCode = super.hashCode();
-    return hashCode;
+    if (this.hashCode == null) {
+      this.hashCode = super.hashCode();
+    }
+    return this.hashCode;
   }
 }

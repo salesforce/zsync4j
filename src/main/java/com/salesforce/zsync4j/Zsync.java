@@ -21,10 +21,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.google.common.base.Stopwatch;
 import com.salesforce.zsync4j.Zsync.Options.Credentials;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ControlFile;
+import com.salesforce.zsync4j.internal.EventManager;
+import com.salesforce.zsync4j.internal.EventManagerImpl;
 import com.salesforce.zsync4j.internal.Header;
 import com.salesforce.zsync4j.internal.OutputFile;
 import com.salesforce.zsync4j.internal.util.HttpClient;
@@ -268,11 +269,16 @@ public class Zsync {
     if (outputFileListener == null) {
       outputFileListener = OutputFileListener.NO_OP;
     }
+  }
+
+  private void zsyncInternal(URI zsyncFile, Options options, OutputFileListener outputFileListener)
+      throws ZsyncFileNotFoundException, OutputFileValidationException {
 
     final ControlFile controlFile;
     try (InputStream in = openZsyncFile(zsyncFile, httpClient, options)) {
       controlFile = ControlFile.read(in);
     } catch (FileNotFoundException e) {
+
       throw new ZsyncFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
     } catch (IOException e) {
       throw new RuntimeException("Failed to read zsync control file", e);
@@ -306,8 +312,11 @@ public class Zsync {
       outputFileListener.transferEnded(transferEndedEvent(outputFile, remoteFileUri, controlFile.getHeader()
           .getLength(), exception));
     }
+  }
 
-    System.out.println(s.stop());
+  private <T extends Exception> void failAndRethrow(T exception) throws T {
+    this.events.transferFailed(exception);
+    throw exception;
   }
 
   /**
@@ -385,18 +394,21 @@ public class Zsync {
     });
     return new HttpClient(clone);
   }
-  
-  static boolean processInputFiles(OutputFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles)
+
+  private boolean processInputFiles(OutputFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles)
       throws IOException {
     for (Path inputFile : inputFiles) {
-      if (processInputFile(targetFile, controlFile, inputFile)) {
+      this.events.inputFileProcessingStarted(inputFile);
+      boolean targetFileIsComplete = this.processInputFile(targetFile, controlFile, inputFile);
+      this.events.inputFileProcessingComplete(inputFile);
+      if (targetFileIsComplete) {
         return true;
       }
     }
     return false;
   }
 
-  static boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile) throws IOException {
+  private boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile) throws IOException {
     try (final FileChannel channel = FileChannel.open(inputFile)) {
       final BlockMatcher matcher = BlockMatcher.create(controlFile);
       final ReadableByteChannel c = zeroPad(channel, controlFile.getHeader());
@@ -421,7 +433,7 @@ public class Zsync {
     final int r = (int) (header.getLength() % header.getBlocksize());
     return r == 0 ? channel : new ZeroPaddedReadableByteChannel(channel, header.getBlocksize() - r);
   }
-
+  
   // this is just a temporary hacked up CLI for testing purposes
   public static void main(String[] args) throws IOException, ZsyncFileNotFoundException {
     if (args.length == 0) {

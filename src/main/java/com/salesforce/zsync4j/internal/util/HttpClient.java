@@ -22,6 +22,7 @@ import java.util.Set;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.net.MediaType;
+import com.salesforce.zsync4j.internal.EventManager;
 import com.salesforce.zsync4j.internal.Range;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
@@ -75,9 +76,15 @@ public class HttpClient {
   public void partialGet(URI uri, List<Range> allRanges, RangeReceiver receiver, ProgressMonitor monitor)
       throws IOException {
     List<List<Range>> chunkedRanges = Lists.partition(allRanges, MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST);
+    long expectedBytes = 0;
+    for (Range range : allRanges) {
+      expectedBytes += range.size();
+    }
+    this.events.remoteFileProcessingStarted(url, expectedBytes, allRanges.size(), chunkedRanges.size());
     for (List<Range> rangeChunk : chunkedRanges) {
       partialGetInternal(uri, rangeChunk, receiver, monitor);
     }
+    this.events.remoteFileProcessingComplete();
   }
 
   private void partialGetInternal(URI uri, List<Range> ranges, RangeReceiver receiver, ProgressMonitor monitor)
@@ -139,12 +146,14 @@ public class HttpClient {
         // already combine and sort ranges, this should not happen
         if (!remaining.remove(range))
           throw new RuntimeException("Received range " + range + " not one of requested " + remaining);
+
         final InputStream part = ByteStreams.limit(buffered, range.size());
         receiver.receive(range, part);
       }
     } catch (IOException e) {
       throw new RuntimeException("Failed to read response", e);
     }
+    this.events.blocksRequestComplete(ranges);
   }
 
   private InputStream inputStream(Response response, ProgressMonitor monitor) {

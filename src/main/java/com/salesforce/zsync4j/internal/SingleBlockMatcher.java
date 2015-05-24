@@ -31,45 +31,46 @@ public class SingleBlockMatcher extends BlockMatcher {
     this.blockSize = header.getBlocksize();
     this.rsumHashSet = ImmutableSet.copyOf(Iterables.transform(controlFile.getBlockSums(), getRsum));
     this.state = INIT;
-    this.blockSum = new MutableBlockSum(newMD4(), blockSize, header.getRsumBytes(), header.getChecksumBytes());
+    this.blockSum = new MutableBlockSum(newMD4(), this.blockSize, header.getRsumBytes(), header.getChecksumBytes());
   }
 
   @Override
   public int getMatchBytes() {
-    return blockSize;
+    return this.blockSize;
   }
 
   @Override
   public int match(OutputFile targetFile, ReadableByteBuffer buffer) {
-    switch (state) {
+    switch (this.state) {
       case INIT:
-        blockSum.rsum.init(buffer);
+        this.blockSum.rsum.init(buffer);
         break;
       case MATCHED:
-        blockSum.rsum.init(buffer);
+        this.blockSum.rsum.init(buffer);
         break;
       case MISSED:
-        blockSum.rsum.update(firstByte, buffer.get(buffer.length() - 1));
+        this.blockSum.rsum.update(this.firstByte, buffer.get(buffer.length() - 1));
         break;
       default:
         throw new RuntimeException("Unhandled case");
     }
 
-    final int r = blockSum.rsum.toInt();
+    final int r = this.blockSum.rsum.toInt();
     // cheap negative check followed by more expensive positive check
-    if (rsumHashSet.contains(r)) {
+    if (this.rsumHashSet.contains(r)) {
       // only compute strong checksum if weak matched some block
-      blockSum.checksum.setChecksum(buffer);
-      final List<Integer> matches = targetFile.getPositions(blockSum);
+      this.blockSum.checksum.setChecksum(buffer);
+      final List<Integer> matches = targetFile.getPositions(this.blockSum);
       if (!matches.isEmpty()) {
-        for (Integer position : matches)
+        for (Integer position : matches) {
           targetFile.writeBlock(position, buffer);
-        state = MATCHED;
-        return blockSize;
+        }
+        this.state = MATCHED;
+        return this.blockSize;
       }
     }
-    state = MISSED;
-    firstByte = buffer.get(0);
+    this.state = MISSED;
+    this.firstByte = buffer.get(0);
     return 1;
   }
 

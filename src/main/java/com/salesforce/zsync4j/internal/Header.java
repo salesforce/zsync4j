@@ -13,7 +13,7 @@ import java.util.Date;
 
 public class Header {
 
-  public static Header read(InputStream in) throws IOException {
+  public static Header read(InputStream in, EventManager events) throws IOException {
     String version = null;
     String filename = null;
     Date mtime = null;
@@ -34,26 +34,31 @@ public class Header {
         terminated = true;
         break;
       }
+      events.bytesDownloaded(line.getBytes(US_ASCII).length);
       final int index = line.indexOf(':');
-      if (index == -1 || index == 0 || index >= line.length() - 2 || line.charAt(index + 1) != ' ')
+      if (index == -1 || index == 0 || index >= line.length() - 2 || line.charAt(index + 1) != ' ') {
         throw new IllegalArgumentException("Invalid header line: " + line);
+      }
       final String name = line.substring(0, index);
       final String value = line.substring(index + 2);
 
       // zsync doesn't check for duplicate headers
       if ("zsync".equals(name)) {
-        if ("0.0.4".equals(value))
+        if ("0.0.4".equals(value)) {
           throw new IllegalArgumentException("Incompatible zsync version " + value);
+        }
         version = value;
       } else if ("Min-Version".equals(name)) {
-        if (value.compareTo(VERSION) > 0)
+        if (value.compareTo(VERSION) > 0) {
           throw new IllegalArgumentException("Zsync version " + VERSION + " does not satisfy min-version requirement "
               + value);
+        }
       } else if ("Length".equals(name)) {
         try {
           length = Long.parseLong(value);
-          if (length <= 0)
+          if (length <= 0) {
             throw new NumberFormatException();
+          }
         } catch (NumberFormatException e) {
           throwInvalidHeaderValue(name, value);
         }
@@ -64,28 +69,32 @@ public class Header {
       } else if ("Blocksize".equals(name)) {
         try {
           blocksize = Integer.parseInt(value);
-          if (blocksize <= 0)
+          if (blocksize <= 0) {
             throw new NumberFormatException();
+          }
         } catch (NumberFormatException e) {
           throwInvalidHeaderValue(name, value);
         }
       } else if ("Hash-Lengths".equals(name)) {
         try {
           final String[] split = value.split(",");
-          if (split.length != 3)
+          if (split.length != 3) {
             throw new NumberFormatException();
+          }
           final int sm = Integer.parseInt(split[0]);
           seqMatches = sm == 2;
           rsumBytes = Integer.parseInt(split[1]);
           checksumBytes = Integer.parseInt(split[2]);
-          if (sm > 2 || sm < 1 || rsumBytes < 1 || rsumBytes > 4 || checksumBytes < 3 || checksumBytes > 16)
+          if (sm > 2 || sm < 1 || rsumBytes < 1 || rsumBytes > 4 || checksumBytes < 3 || checksumBytes > 16) {
             throw new NumberFormatException();
+          }
         } catch (NumberFormatException e) {
           throwInvalidHeaderValue(name, value);
         }
       } else if ("SHA-1".equals(name)) {
-        if (value.length() != 40)
+        if (value.length() != 40) {
           throwInvalidHeaderValue(name, value);
+        }
         sha1 = value;
       } else if ("MTime".equals(name)) {
         try {
@@ -98,18 +107,24 @@ public class Header {
       }
     }
 
-    if (!terminated)
+    if (!terminated) {
       throw new IllegalArgumentException("Invalid header: terminating line feed missing.");
-    if (filename == null)
+    }
+    if (filename == null) {
       throwMissingHeader("Filename");
-    if (blocksize == null)
+    }
+    if (blocksize == null) {
       throwMissingHeader("Blocksize");
-    if (length == null)
+    }
+    if (length == null) {
       throwMissingHeader("Length");
-    if (length == null)
+    }
+    if (length == null) {
       throwMissingHeader("URL");
-    if (sha1 == null)
+    }
+    if (sha1 == null) {
       throwMissingHeader("SHA-1");
+    }
     return new Header(version, filename, mtime, blocksize, length, checksumBytes, rsumBytes, seqMatches, url, sha1);
   }
 
@@ -147,46 +162,46 @@ public class Header {
   }
 
   public String getVersion() {
-    return version;
+    return this.version;
   }
 
   public String getFilename() {
-    return filename;
+    return this.filename;
   }
 
   public Date getMtime() {
-    return mtime;
+    return this.mtime;
   }
 
   public int getBlocksize() {
-    return blocksize;
+    return this.blocksize;
   }
 
   public long getLength() {
-    return length;
+    return this.length;
   }
 
   public int getChecksumBytes() {
-    return checksumBytes;
+    return this.checksumBytes;
   }
 
   public int getRsumBytes() {
-    return rsumBytes;
+    return this.rsumBytes;
   }
 
   public boolean isSeqMatches() {
-    return seqMatches;
+    return this.seqMatches;
   }
 
   public String getUrl() {
-    return url;
+    return this.url;
   }
 
   public String getSha1() {
-    return sha1;
+    return this.sha1;
   }
 
   public int getNumBlocks() {
-    return (int) ((length + blocksize - 1) / blocksize);
+    return (int) ((this.length + this.blocksize - 1) / this.blocksize);
   }
 }
