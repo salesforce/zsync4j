@@ -18,6 +18,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 
 import com.google.common.collect.ImmutableList;
@@ -54,8 +55,12 @@ public class OutputFile implements RangeReceiver, Closeable {
     this.path = path;
     this.remoteUri = remoteUri;
     this.outputFileListener = outputFileListener;
-    this.tempPath = path.getParent().resolve(path.getFileName().toString() + ".part");
-    mkdirs(path.getParent());
+    this.tempPath =
+        path.getParent() == null ? Paths.get(path.getFileName().toString() + ".part") : path.getParent().resolve(
+            path.getFileName().toString() + ".part");
+    if (path.getParent() != null) {
+      mkdirs(path.getParent());
+    }
     this.channel = FileChannel.open(this.tempPath, CREATE, WRITE, READ);
 
     final Header header = controlFile.getHeader();

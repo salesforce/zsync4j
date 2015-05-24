@@ -325,7 +325,7 @@ public class Zsync {
       }
     });
   }
-
+  
   static boolean processInputFiles(OutputFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles)
       throws IOException {
     for (Path inputFile : inputFiles) {

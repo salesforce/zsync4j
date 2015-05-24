@@ -74,7 +74,11 @@ public class RangeFetcher {
 
       if ("multipart".equals(mediaType.type())) {
         final byte[] boundary = getBoundary(mediaType);
-
+        /*
+         * try { System.out.println("Body below");
+         * System.out.println(response.body().string().substring(0, 200)); } catch (IOException
+         * exception) { System.out.println("IOException: " + exception.getMessage()); }
+         */
         try (InputStream in = new BufferedInputStream(response.body().byteStream())) {
           Range range;
           while ((range = this.nextPart(in, boundary)) != null) {
@@ -108,8 +112,15 @@ public class RangeFetcher {
   }
 
   private Range nextPart(InputStream in, byte[] boundary) throws IOException {
-    if (!(in.read() == '\r' && in.read() == '\n' && in.read() == '-' && in.read() == '-')) {
-      throw new RuntimeException("Expected part being not matched");
+    int c = in.read();
+    if (c == '\r') {
+      if (!(in.read() == '\n' && in.read() == '-' && in.read() == '-')) {
+        throw new RuntimeException("Expected part being not matched");
+      }
+    } else if (c == '-') {
+      if (!(in.read() == '-')) {
+        throw new RuntimeException("Expected part being not matched");
+      }
     }
     final byte[] b = new byte[boundary.length];
     int read = 0, r;
@@ -195,19 +206,20 @@ public class RangeFetcher {
       throw new IllegalArgumentException("Invalid Content-Range value " + value);
     }
     final int idx = value.indexOf('-', prefix.length());
-    if (idx == 0) {
+    if (idx <= 0) {
       throw new IllegalArgumentException("Invalid Content-Range value " + value);
     }
     final long first = Long.parseLong(value.substring(prefix.length(), idx));
     final int dash = value.indexOf('/', idx);
-    if (idx == 0) {
+    if (idx <= 0) {
       throw new IllegalArgumentException("Invalid Content-Range value " + value);
     }
     final long last = Long.parseLong(value.substring(idx + 1, dash));
     final Range range = new Range(first, last);
     final long size = Long.parseLong(value.substring(dash + 1));
     if (size != range.size()) {
-      throw new IllegalArgumentException("Invalid Content-Range size " + value);
+      // TODO - Need to review this next line
+      // throw new IllegalArgumentException("Invalid Content-Range size " + value);
     }
     return range;
   }
