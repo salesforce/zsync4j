@@ -14,20 +14,20 @@ import org.junit.Test;
 
 import com.google.common.collect.Lists;
 import com.salesforce.zsync4j.internal.Range;
-import com.salesforce.zsync4j.internal.util.RangeFetcher.RangeReceiver;
+import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
 import com.squareup.okhttp.Call;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Protocol;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 
-public class RangeFetcherTest {
+public class HttpClientTest {
 
   @Test
   public void exceptionThrownFromConstructorForNullHttpClient() {
     // Act
     try {
-      new RangeFetcher(null);
+      new HttpClient(null);
     } catch (IllegalArgumentException exception) {
 
       // Assert
@@ -42,18 +42,18 @@ public class RangeFetcherTest {
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
     List<Range> ranges = createSomeRanges(1);
     URI url = new URI("someurl");
-    IOException expected = new IOException();
+    IOException expected = new IOException("IO");
     Call mockCall = mock(Call.class);
     when(mockCall.execute()).thenThrow(expected);
     when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
 
     // Act
     try {
-      new RangeFetcher(mockHttpClient).fetch(url, ranges, mockReceiver);
-    } catch (RuntimeException exception) {
+      new HttpClient(mockHttpClient).partialGet(url, ranges, mockReceiver, null);
+    } catch (IOException exception) {
 
       // Assert
-      assertEquals("Wrong RuntimeException caught", expected, exception.getCause());
+      assertEquals("IO", exception.getMessage());
     }
   }
 
@@ -76,11 +76,11 @@ public class RangeFetcherTest {
 
       // Act
       try {
-        new RangeFetcher(mockHttpClient).fetch(url, ranges, mockReceiver);
-      } catch (RuntimeException exception) {
+        new HttpClient(mockHttpClient).partialGet(url, ranges, mockReceiver, null);
+      } catch (IOException exception) {
 
         // Assert
-        assertEquals("Http request failed with error code " + responseToTest, exception.getMessage());
+        assertEquals("Http request for resource "+url+" returned unexpected http code: " + responseToTest, exception.getMessage());
       }
     }
 

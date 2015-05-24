@@ -1,10 +1,13 @@
 package com.salesforce.zsync4j.internal.util;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
@@ -103,4 +106,20 @@ public class ZsyncUtil {
       throw new RuntimeException("Failed to get file size for file: " + file.getFileName(), exception);
     }
   }
+
+  /**
+   * Modifies {@link Paths#get(URI)} to return null if no suitable file system provider is found for
+   * the given URI instead of throwing a {@link FileSystemNotFoundException}.
+   *
+   * @param uri
+   * @return
+   */
+  public static Path getPath(URI uri) {
+    try {
+      return Paths.get(uri);
+    } catch (FileSystemNotFoundException e) {
+      return null;
+    }
+  }
+
 }

@@ -1,11 +1,18 @@
 package com.salesforce.zsync4j.internal.util;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.salesforce.zsync4j.internal.util.ZsyncUtil.mkdirs;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 import java.io.BufferedInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -19,8 +26,9 @@ import com.salesforce.zsync4j.internal.Range;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
+import com.squareup.okhttp.ResponseBody;
 
-public class RangeFetcher {
+public class HttpClient {
 
   public static interface RangeReceiver {
     void receive(Range range, InputStream in) throws IOException;
@@ -28,42 +36,68 @@ public class RangeFetcher {
 
   private static final int MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST = 50;
 
-  private final OkHttpClient httpClient;
+  private final OkHttpClient okHttpClient;
 
-  public RangeFetcher(OkHttpClient httpClient) {
-    if (httpClient == null) {
-      throw new IllegalArgumentException("httpClient cannot be null");
-    }
-    this.httpClient = httpClient;
+  public HttpClient(OkHttpClient okHttpClient) {
+    checkArgument(okHttpClient != null, "httpClient cannot be null");
+    this.okHttpClient = okHttpClient;
   }
 
-  public void fetch(URI url, List<Range> allRanges, RangeReceiver receiver) {
+  // TODO conditional request and resume
+  public InputStream get(URI uri, ProgressMonitor monitor, Path output) throws IOException {
+    final Path parent = output.getParent();
+    final Path tmp = parent.resolve(output.getFileName() + ".part");
+    mkdirs(parent);
+    try (InputStream in = get(uri, monitor)) {
+      Files.copy(in, tmp, REPLACE_EXISTING);
+    }
+    Files.move(tmp, output, REPLACE_EXISTING, ATOMIC_MOVE);
+    return Files.newInputStream(output);
+  }
+
+  public InputStream get(URI uri, ProgressMonitor monitor) throws IOException {
+    final Request request = new Request.Builder().url(uri.toString()).build();
+    final Response response = okHttpClient.newCall(request).execute();
+
+    switch (response.code()) {
+      case 200:
+        break;
+      case 404:
+        throw new FileNotFoundException(uri.toString());
+      default:
+        throw new IOException("Http request for resource " + uri + " returned unexpected http code: " + response.code());
+    }
+
+    return inputStream(response, monitor);
+  }
+
+
+  public void partialGet(URI uri, List<Range> allRanges, RangeReceiver receiver, ProgressMonitor monitor)
+      throws IOException {
     List<List<Range>> chunkedRanges = Lists.partition(allRanges, MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST);
     for (List<Range> rangeChunk : chunkedRanges) {
-      this.fetchInternal(url, rangeChunk, receiver);
+      partialGetInternal(uri, rangeChunk, receiver, monitor);
     }
   }
 
-  private void fetchInternal(URI url, List<Range> ranges, RangeReceiver receiver) {
+  private void partialGetInternal(URI uri, List<Range> ranges, RangeReceiver receiver, ProgressMonitor monitor)
+      throws IOException {
     final Set<Range> remaining = new LinkedHashSet<>(ranges);
 
     while (!remaining.isEmpty()) {
-      // TODO limit ranges sent at once
       final Request request =
-          new Request.Builder().addHeader("Range", "bytes=" + toString(remaining)).url(url.toString()).build();
-      final Response response;
-      try {
-        response = this.httpClient.newCall(request).execute();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+          new Request.Builder().addHeader("Range", "bytes=" + toString(remaining)).url(uri.toString()).build();
+      final Response response = okHttpClient.newCall(request).execute();
 
+      // TODO if the server returns 200, we may want to overwrite the whole file locally
       switch (response.code()) {
         case 206:
           break;
-        // TODO - Need to think about how we want to handle a 200
+        case 404:
+          throw new FileNotFoundException(uri.toString());
         default:
-          throw new RuntimeException("Http request failed with error code " + response.code());
+          throw new IOException("Http request for resource " + uri + " returned unexpected http code: "
+              + response.code());
       }
 
       final String contentType = response.header("Content-Type");
@@ -71,44 +105,52 @@ public class RangeFetcher {
         throw new RuntimeException("Missing Content-Type header");
       }
       final MediaType mediaType = MediaType.parse(contentType);
-
       if ("multipart".equals(mediaType.type())) {
         final byte[] boundary = getBoundary(mediaType);
-        /*
-         * try { System.out.println("Body below");
-         * System.out.println(response.body().string().substring(0, 200)); } catch (IOException
-         * exception) { System.out.println("IOException: " + exception.getMessage()); }
-         */
-        try (InputStream in = new BufferedInputStream(response.body().byteStream())) {
-          Range range;
-          while ((range = this.nextPart(in, boundary)) != null) {
-            // technically it's OK for server to combine or re-order ranges. However, since we
-            // already combine and sort ranges, this should not happen
-            if (!remaining.remove(range)) {
-              throw new RuntimeException("Received range " + range + " not one of requested " + remaining);
-            }
-            final InputStream part = ByteStreams.limit(in, range.size());
-            receiver.receive(range, part);
-          }
-        } catch (IOException e) {
-          throw new RuntimeException("Failed to read response", e);
-        }
+        handleMultiPartBody(response, receiver, remaining, monitor, boundary);
       } else {
-        final String contentRange = response.header("Content-Range");
-        if (contentRange == null) {
-          throw new RuntimeException("Content-Range header missing");
-        }
-        final Range range = parseContentRange(contentRange);
-        if (!remaining.remove(range)) {
-          throw new RuntimeException("Received range " + range + " not one of requested " + remaining);
-        }
-        try {
-          receiver.receive(range, response.body().byteStream());
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
+        handleSinglePartBody(response, receiver, remaining, monitor);
       }
     }
+  }
+
+  void handleSinglePartBody(Response response, RangeReceiver receiver, final Set<Range> remaining,
+      ProgressMonitor monitor) throws IOException {
+    final String contentRange = response.header("Content-Range");
+    if (contentRange == null)
+      throw new IOException("Content-Range header missing");
+
+    final Range range = parseContentRange(contentRange);
+    if (!remaining.remove(range))
+      throw new IOException("Received range " + range + " not one of requested " + remaining);
+
+    InputStream in = response.body().byteStream();
+    if (monitor != null)
+      in = new ProgressMonitorInputStream(in, range.size(), monitor);
+    receiver.receive(range, in);
+  }
+
+  void handleMultiPartBody(Response response, RangeReceiver receiver, final Set<Range> remaining,
+      ProgressMonitor monitor, byte[] boundary) {
+    try (InputStream in = inputStream(response, monitor); InputStream buffered = new BufferedInputStream(in)) {
+      Range range;
+      while ((range = nextPart(buffered, boundary)) != null) {
+        // technically it's OK for server to combine or re-order ranges. However, since we
+        // already combine and sort ranges, this should not happen
+        if (!remaining.remove(range))
+          throw new RuntimeException("Received range " + range + " not one of requested " + remaining);
+        final InputStream part = ByteStreams.limit(buffered, range.size());
+        receiver.receive(range, part);
+      }
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to read response", e);
+    }
+  }
+
+  private InputStream inputStream(Response response, ProgressMonitor monitor) {
+    final ResponseBody body = response.body();
+    final InputStream in = body.byteStream();
+    return monitor == null ? in : new ProgressMonitorInputStream(in, body.contentLength(), monitor);
   }
 
   private Range nextPart(InputStream in, byte[] boundary) throws IOException {

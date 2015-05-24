@@ -169,8 +169,7 @@ public class DoubleBlockMatcher extends BlockMatcher {
     final Integer next = position + 1;
     if (next == outputFile.getNumBlocks())
       return true;
-
-    final BlockSum nextTargetBlock = outputFile.get(position + 1);
+    final BlockSum nextTargetBlock = outputFile.get(next);
     if (nextTargetBlock.getRsum() == nextBlockSum.rsum.toInt()) {
       // compute next block sum only once
       if (!nextBlockSum.checksum.isSet())
