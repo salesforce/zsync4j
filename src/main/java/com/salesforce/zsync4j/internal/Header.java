@@ -13,7 +13,7 @@ import java.util.Date;
 
 public class Header {
 
-  public static Header read(InputStream in, EventManager events) throws IOException {
+  public static Header read(InputStream in) throws IOException {
     String version = null;
     String filename = null;
     Date mtime = null;

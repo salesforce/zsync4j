@@ -8,21 +8,20 @@ import com.google.common.collect.ImmutableList;
 
 public class ImmutableBlockSum extends BlockSum {
 
-  public static List<ImmutableBlockSum> readSums(InputStream in, int numBlocks, int rsumBytes, int checksumBytes,
-      EventManager events) throws IOException {
+  public static List<ImmutableBlockSum> readSums(InputStream in, int numBlocks, int rsumBytes, int checksumBytes)
+      throws IOException {
     final ImmutableList.Builder<ImmutableBlockSum> b = ImmutableList.builder();
     for (int i = 0; i < numBlocks; i++) {
-      b.add(ImmutableBlockSum.read(in, rsumBytes, checksumBytes, events));
+      b.add(ImmutableBlockSum.read(in, rsumBytes, checksumBytes));
     }
     return b.build();
   }
 
-  public static ImmutableBlockSum read(InputStream in, int rsumBytes, int checksumBytes, EventManager events)
-      throws IOException {
-    return new ImmutableBlockSum(readRsum(in, rsumBytes, events), readChecksum(in, checksumBytes, events));
+  public static ImmutableBlockSum read(InputStream in, int rsumBytes, int checksumBytes) throws IOException {
+    return new ImmutableBlockSum(readRsum(in, rsumBytes), readChecksum(in, checksumBytes));
   }
 
-  static int readRsum(InputStream in, int rsumBytes, EventManager events) throws IOException {
+  static int readRsum(InputStream in, int rsumBytes) throws IOException {
     int rsum = 0;
     for (int i = rsumBytes - 1; i >= 0; i--) {
       int next = in.read();
@@ -34,7 +33,7 @@ public class ImmutableBlockSum extends BlockSum {
     return rsum;
   }
 
-  static byte[] readChecksum(InputStream in, int len, EventManager events) throws IOException {
+  static byte[] readChecksum(InputStream in, int len) throws IOException {
     final byte[] b = new byte[len];
     int read = 0;
     int r;

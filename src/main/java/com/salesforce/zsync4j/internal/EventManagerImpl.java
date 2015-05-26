@@ -9,7 +9,6 @@ import java.util.List;
 
 import com.salesforce.zsync4j.Zsync.Options;
 import com.salesforce.zsync4j.ZsyncListener;
-import com.salesforce.zsync4j.internal.util.ProgressMonitor;
 
 
 /**
@@ -17,7 +16,7 @@ import com.salesforce.zsync4j.internal.util.ProgressMonitor;
  *
  * @author bstclair
  */
-public class EventManagerImpl implements EventManager, ProgressMonitor {
+public class EventManagerImpl implements EventManager {
 
   private final ZsyncListener listener;
 
@@ -32,7 +31,7 @@ public class EventManagerImpl implements EventManager, ProgressMonitor {
   }
 
   @Override
-  public void transferStarted(URI requestedZsyncUri, Options options) {
+  public void zsyncStarted(URI requestedZsyncUri, Options options) {
     this.startTimeInMilliseconds = System.currentTimeMillis();
     this.listener.transferStarted(requestedZsyncUri, options);
   }
@@ -68,11 +67,6 @@ public class EventManagerImpl implements EventManager, ProgressMonitor {
   public void blockProcessingComplete(Range block) {}
 
   @Override
-  public void bytesDownloaded(long bytes) {
-    this.totalBytesDownloaded += bytes;
-  }
-
-  @Override
   public void bytesWritten(Path file, long bytes) {}
 
   @Override
@@ -90,7 +84,7 @@ public class EventManagerImpl implements EventManager, ProgressMonitor {
   public void moveTempFileComplete() {}
 
   @Override
-  public void transferFailed(Exception exception) {
+  public void zsyncFailed(Exception exception) {
     this.listener.transferFailed(this.requestedZsyncUri, exception);
   }
 
@@ -100,19 +94,23 @@ public class EventManagerImpl implements EventManager, ProgressMonitor {
   }
 
   @Override
-  public void transferComplete() {
+  public void zsyncComplete() {
     long totalTimeInMilliseconds = System.currentTimeMillis() - this.startTimeInMilliseconds;
     this.listener.transferComplete(this.outputFile, this.sha1, this.totalBytesDownloaded, totalTimeInMilliseconds);;
   }
 
   @Override
-  public void begin(long size) {}
+  public void beginTransfer(String uri, long totalBytes) {
+    // TODO Auto-generated method stub
+
+  }
 
   @Override
-  public void progress(int bytesTransferred) {
-    this.bytesDownloaded(bytesTransferred);
+  public void transferred(int bytes) {
+    this.totalBytesDownloaded += bytes;
   }
 
   @Override
   public void done() {}
+
 }

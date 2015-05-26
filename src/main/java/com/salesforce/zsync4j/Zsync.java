@@ -242,9 +242,9 @@ public class Zsync {
   public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException, OutputFileValidationException {
     try {
       options = new Options(options); // Copy, since the supplied Options is mutable
-      this.events.transferStarted(zsyncFile, options);
+      this.events.zsyncStarted(zsyncFile, options);
       this.zsyncInternal(zsyncFile, options);
-      this.events.transferComplete();
+      this.events.zsyncComplete();
     } catch (ZsyncFileNotFoundException exception) {
       this.failAndRethrow(exception);
     } catch (OutputFileValidationException exception) {
@@ -255,7 +255,7 @@ public class Zsync {
   }
 
   private <T extends Exception> void failAndRethrow(T exception) throws T {
-    this.events.transferFailed(exception);
+    this.events.zsyncFailed(exception);
     throw exception;
   }
 
@@ -277,12 +277,13 @@ public class Zsync {
     final ControlFile controlFile;
     this.events.controlFileProcessingStarted(zsyncFile);
     try (InputStream in = this.openZsyncFile(zsyncFile, httpClient, options)) {
-      controlFile = ControlFile.read(in, this.events);
+      controlFile = ControlFile.read(in);
     } catch (FileNotFoundException e) {
       throw new ZsyncFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
     } catch (IOException e) {
       throw new RuntimeException("Failed to read zsync control file", e);
     }
+    this.events.controlFileProcessingComplete(controlFile);
 
     // determine output file location
     Path outputFile = options.getOutputFile();
@@ -336,9 +337,9 @@ public class Zsync {
         // check if we should persist the file locally
         final Path savePath = options.getSaveZsyncFile();
         if (savePath == null) {
-          return httpClient.get(zsyncFile);
+          return httpClient.get(zsyncFile, this.events);
         } else {
-          return httpClient.get(zsyncFile, savePath);
+          return httpClient.get(zsyncFile, savePath, this.events);
         }
       } else {
         in = Files.newInputStream(path);
@@ -381,7 +382,7 @@ public class Zsync {
         return b.build();
       }
     });
-    return new HttpClient(clone, this.events);
+    return new HttpClient(clone);
   }
 
   private boolean processInputFiles(OutputFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles)
@@ -456,15 +457,15 @@ public class Zsync {
     /*
      * final OutputFileListener l = new OutputFileListener() { final AtomicLong total = new
      * AtomicLong(); final AtomicLong dl = new AtomicLong();
-     *
+     * 
      * @Override public void transferStarted(OutputFileEvent event) {
      * this.total.set(event.getRemoteFileSizeInBytes()); }
-     *
+     * 
      * @Override public void bytesDownloaded(OutputFileEvent event) {
      * this.dl.addAndGet(event.getBytesDownloaded()); }
-     *
+     * 
      * @Override public void bytesWritten(OutputFileEvent event) {}
-     *
+     * 
      * @Override public void transferEnded(OutputFileEvent event) { System.out.println("Downloaded "
      * + (this.dl.get() / 1024 / 1024) + "MB of " + (this.total.get() / 1024 / 1024) + " MB"); } };
      */

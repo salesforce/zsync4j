@@ -146,6 +146,8 @@ public class OutputFile implements RangeReceiver, Closeable {
       throw new RuntimeException("Invalid range received: last byte not block aligned");
     }
 
+    this.events.blockProcessingStarted(range);
+
     final ReadableByteChannel src = Channels.newChannel(in);
     final long size = range.size();
     long remaining = size;
@@ -164,6 +166,8 @@ public class OutputFile implements RangeReceiver, Closeable {
         this.completed[i] = true;
       }
     }
+
+    this.events.blockProcessingComplete(range);
   }
 
   @Override

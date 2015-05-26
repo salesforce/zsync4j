@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,14 +14,15 @@ import java.util.List;
 import org.junit.Test;
 
 import com.google.common.collect.Lists;
-import com.salesforce.zsync4j.internal.EventManager;
 import com.salesforce.zsync4j.internal.Range;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
+import com.salesforce.zsync4j.internal.util.HttpClient.TransferListener;
 import com.squareup.okhttp.Call;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Protocol;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
+import com.squareup.okhttp.ResponseBody;
 
 public class HttpClientTest {
 
@@ -28,7 +30,7 @@ public class HttpClientTest {
   public void exceptionThrownFromConstructorForNullHttpClient() {
     // Act
     try {
-      new HttpClient(null, ProgressMonitor.DEFAULT);
+      new HttpClient(null);
     } catch (IllegalArgumentException exception) {
 
       // Assert
@@ -41,7 +43,7 @@ public class HttpClientTest {
     // Arrange
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
-    EventManager mockEventManager = mock(EventManager.class);
+    TransferListener listener = mock(TransferListener.class);
     List<Range> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
     IOException expected = new IOException("IO");
@@ -51,7 +53,7 @@ public class HttpClientTest {
 
     // Act
     try {
-      new HttpClient(mockHttpClient, ProgressMonitor.DEFAULT).partialGet(url, ranges, mockReceiver, mockEventManager);
+      new HttpClient(mockHttpClient).partialGet(url, ranges, mockReceiver, listener);
     } catch (IOException exception) {
 
       // Assert
@@ -62,10 +64,10 @@ public class HttpClientTest {
   @Test
   public void runtimeExceptionThrownForHttpResponsesOtherThan206() throws Exception {
     // Arrange
-    List<Integer> responsesToTest = Lists.newArrayList(200, 413); // Add whatever other ones we want
+    List<Integer> responsesToTest = Lists.newArrayList(500, 413); // Add whatever other ones we want
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
-    EventManager mockEventManager = mock(EventManager.class);
+    TransferListener listener = mock(TransferListener.class);
     List<Range> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
 
@@ -79,7 +81,7 @@ public class HttpClientTest {
 
       // Act
       try {
-        new HttpClient(mockHttpClient, ProgressMonitor.DEFAULT).partialGet(url, ranges, mockReceiver, mockEventManager);
+        new HttpClient(mockHttpClient).partialGet(url, ranges, mockReceiver, listener);
       } catch (IOException exception) {
 
         // Assert
@@ -93,6 +95,22 @@ public class HttpClientTest {
   private Response fakeResponse(int code) {
     Request fakeRequest = new Request.Builder().url("url").build();
     return new Response.Builder().protocol(Protocol.HTTP_2).request(fakeRequest).code(code).build();
+  }
+
+  @Test
+  public void testGetWithProgress() throws IOException {
+    final InputStream in = mock(InputStream.class);
+    
+    final ResponseBody body = mock(ResponseBody.class);
+    when(body.contentLength()).thenReturn(1024l);
+    when(body.byteStream()).thenReturn(in);
+    final Response response = new Response.Builder().body(body).code(200).build();
+
+    final OkHttpClient mockHttpClient = mock(OkHttpClient.class);
+    final Call mockCall = mock(Call.class);
+    when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
+    when(mockCall.execute()).thenReturn(response);
+
   }
 
   private List<Range> createSomeRanges(int numberOfRangesToCreate) {
