@@ -13,6 +13,7 @@ import java.util.List;
 import org.junit.Test;
 
 import com.google.common.collect.Lists;
+import com.salesforce.zsync4j.internal.EventManager;
 import com.salesforce.zsync4j.internal.Range;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
 import com.squareup.okhttp.Call;
@@ -27,7 +28,7 @@ public class HttpClientTest {
   public void exceptionThrownFromConstructorForNullHttpClient() {
     // Act
     try {
-      new HttpClient(null);
+      new HttpClient(null, ProgressMonitor.DEFAULT);
     } catch (IllegalArgumentException exception) {
 
       // Assert
@@ -40,7 +41,8 @@ public class HttpClientTest {
     // Arrange
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
-    List<Range> ranges = createSomeRanges(1);
+    EventManager mockEventManager = mock(EventManager.class);
+    List<Range> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
     IOException expected = new IOException("IO");
     Call mockCall = mock(Call.class);
@@ -49,7 +51,7 @@ public class HttpClientTest {
 
     // Act
     try {
-      new HttpClient(mockHttpClient).partialGet(url, ranges, mockReceiver, null);
+      new HttpClient(mockHttpClient, ProgressMonitor.DEFAULT).partialGet(url, ranges, mockReceiver, mockEventManager);
     } catch (IOException exception) {
 
       // Assert
@@ -63,24 +65,26 @@ public class HttpClientTest {
     List<Integer> responsesToTest = Lists.newArrayList(200, 413); // Add whatever other ones we want
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
-    List<Range> ranges = createSomeRanges(1);
+    EventManager mockEventManager = mock(EventManager.class);
+    List<Range> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
 
     for (Integer responseToTest : responsesToTest) {
 
       // Arrange some more
       Call mockCall = mock(Call.class);
-      Response fakeResponse = fakeResponse(responseToTest);
+      Response fakeResponse = this.fakeResponse(responseToTest);
       when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
       when(mockCall.execute()).thenReturn(fakeResponse);
 
       // Act
       try {
-        new HttpClient(mockHttpClient).partialGet(url, ranges, mockReceiver, null);
+        new HttpClient(mockHttpClient, ProgressMonitor.DEFAULT).partialGet(url, ranges, mockReceiver, mockEventManager);
       } catch (IOException exception) {
 
         // Assert
-        assertEquals("Http request for resource "+url+" returned unexpected http code: " + responseToTest, exception.getMessage());
+        assertEquals("Http request for resource " + url + " returned unexpected http code: " + responseToTest,
+            exception.getMessage());
       }
     }
 

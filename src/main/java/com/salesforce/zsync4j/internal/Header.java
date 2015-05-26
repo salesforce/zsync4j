@@ -34,7 +34,6 @@ public class Header {
         terminated = true;
         break;
       }
-      events.bytesDownloaded(line.getBytes(US_ASCII).length);
       final int index = line.indexOf(':');
       if (index == -1 || index == 0 || index >= line.length() - 2 || line.charAt(index + 1) != ' ') {
         throw new IllegalArgumentException("Invalid header line: " + line);

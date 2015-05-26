@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import com.salesforce.zsync4j.Zsync.Options;
+import com.salesforce.zsync4j.ZsyncListener;
 import com.salesforce.zsync4j.internal.util.ProgressMonitor;
 
 
@@ -18,237 +19,98 @@ import com.salesforce.zsync4j.internal.util.ProgressMonitor;
  */
 public class EventManagerImpl implements EventManager, ProgressMonitor {
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#transferStarted(java.net.URI,
-   * com.salesforce.zsync4j.Zsync.Options)
-   */
+  private final ZsyncListener listener;
+
+  private URI requestedZsyncUri;
+  private Path outputFile;
+  private long startTimeInMilliseconds;
+  private long totalBytesDownloaded;
+  private String sha1;
+
+  public EventManagerImpl(ZsyncListener listener) {
+    this.listener = listener != null ? listener : ZsyncListener.DEFAULT;
+  }
+
   @Override
   public void transferStarted(URI requestedZsyncUri, Options options) {
-    // TODO Auto-generated method stub
-
+    this.startTimeInMilliseconds = System.currentTimeMillis();
+    this.listener.transferStarted(requestedZsyncUri, options);
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#controlFileDownloadStarted(java.net.URI)
-   */
   @Override
-  public void controlFileProcessingStarted(URI controlFileUri) {
-    // TODO Auto-generated method stub
+  public void controlFileProcessingStarted(URI controlFileUri) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see
-   * com.salesforce.zsync4j.internal.EventManager#controlFileDownloadComplete(com.salesforce.zsync4j
-   * .internal.ControlFile)
-   */
   @Override
-  public void controlFileProcessingComplete(ControlFile controlFile) {
-    // TODO Auto-generated method stub
+  public void controlFileProcessingComplete(ControlFile controlFile) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see
-   * com.salesforce.zsync4j.internal.EventManager#inputFileProcessingStarted(java.nio.file.Path)
-   */
   @Override
-  public void inputFileProcessingStarted(Path inputFile) {
-    // TODO Auto-generated method stub
+  public void inputFileProcessingStarted(Path inputFile) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see
-   * com.salesforce.zsync4j.internal.EventManager#inputFileProcessingComplete(java.nio.file.Path)
-   */
   @Override
-  public void inputFileProcessingComplete(Path inputFile) {
-    // TODO Auto-generated method stub
+  public void inputFileProcessingComplete(Path inputFile) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#remoteFileProcessingStarted(java.net.URI,
-   * long, long, long)
-   */
   @Override
-  public void remoteFileProcessingStarted(URI remoteUri, long expectedBytes, long expectedBlocks, long expectedRequests) {
-    // TODO Auto-generated method stub
+  public void remoteFileProcessingStarted(URI remoteUri, long expectedBytes, long expectedBlocks, long expectedRequests) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#remoteFileProcessingComplete()
-   */
   @Override
-  public void remoteFileProcessingComplete() {
-    // TODO Auto-generated method stub
+  public void remoteFileProcessingComplete() {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#blocksRequestStarted(java.util.List)
-   */
   @Override
-  public void blocksRequestStarted(List<Range> blocks) {
-    // TODO Auto-generated method stub
+  public void blocksRequestStarted(List<Range> blocks) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#blocksRequestComplete(java.util.List)
-   */
   @Override
-  public void blocksRequestComplete(List<Range> blocks) {
-    // TODO Auto-generated method stub
+  public void blocksRequestComplete(List<Range> blocks) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see
-   * com.salesforce.zsync4j.internal.EventManager#blockProcessingStarted(com.salesforce.zsync4j.
-   * internal.Range)
-   */
   @Override
-  public void blockProcessingStarted(Range block) {
-    // TODO Auto-generated method stub
+  public void blockProcessingStarted(Range block) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see
-   * com.salesforce.zsync4j.internal.EventManager#blockProcessingComplete(com.salesforce.zsync4j
-   * .internal.Range)
-   */
   @Override
-  public void blockProcessingComplete(Range block) {
-    // TODO Auto-generated method stub
+  public void blockProcessingComplete(Range block) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#bytesDownloaded(long)
-   */
   @Override
   public void bytesDownloaded(long bytes) {
-    // TODO Auto-generated method stub
-
+    this.totalBytesDownloaded += bytes;
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#bytesWritten(java.nio.file.Path, long)
-   */
   @Override
-  public void bytesWritten(Path file, long bytes) {
-    // TODO Auto-generated method stub
+  public void bytesWritten(Path file, long bytes) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#sha1CalculationStarted(java.nio.file.Path)
-   */
   @Override
-  public void sha1CalculationStarted(Path file) {
-    // TODO Auto-generated method stub
+  public void sha1CalculationStarted(Path file) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#sha1CalculationComplete(java.lang.String)
-   */
   @Override
   public void sha1CalculationComplete(String sha1) {
-    // TODO Auto-generated method stub
-
+    this.sha1 = sha1;
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#moveTempFileStarted(java.nio.file.Path,
-   * java.nio.file.Path)
-   */
   @Override
-  public void moveTempFileStarted(Path tempFile, Path targetFile) {
-    // TODO Auto-generated method stub
+  public void moveTempFileStarted(Path tempFile, Path targetFile) {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#moveTempFileComplete()
-   */
   @Override
-  public void moveTempFileComplete() {
-    // TODO Auto-generated method stub
+  public void moveTempFileComplete() {}
 
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#transferFailed(java.lang.Exception)
-   */
   @Override
   public void transferFailed(Exception exception) {
-    // TODO Auto-generated method stub
-
+    this.listener.transferFailed(this.requestedZsyncUri, exception);
   }
 
   @Override
   public void outputFileResolved(Path outputFile) {
-
+    this.outputFile = outputFile;
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.salesforce.zsync4j.internal.EventManager#transferComplete()
-   */
   @Override
   public void transferComplete() {
-    // TODO Auto-generated method stub
-
+    long totalTimeInMilliseconds = System.currentTimeMillis() - this.startTimeInMilliseconds;
+    this.listener.transferComplete(this.outputFile, this.sha1, this.totalBytesDownloaded, totalTimeInMilliseconds);;
   }
 
   @Override
   public void begin(long size) {}
 
   @Override
-  public void progress(int completed) {
-    this.bytesDownloaded(completed);
+  public void progress(int bytesTransferred) {
+    this.bytesDownloaded(bytesTransferred);
   }
 
   @Override

@@ -223,12 +223,20 @@ public class Zsync {
   private final EventManagerImpl events;
 
   public Zsync() {
-    this(new OkHttpClient());
+    this((ZsyncListener) null);
+  }
+
+  public Zsync(ZsyncListener listener) {
+    this(new OkHttpClient(), listener);
   }
 
   public Zsync(OkHttpClient okHttpClient) {
+    this(okHttpClient, null);
+  }
+
+  public Zsync(OkHttpClient okHttpClient, ZsyncListener listener) {
     this.okHttpClient = okHttpClient;
-    this.events = new EventManagerImpl();
+    this.events = new EventManagerImpl(listener);
   }
 
   public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException, OutputFileValidationException {
@@ -292,7 +300,7 @@ public class Zsync {
     try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, this.events)) {
       boolean outputFileComplete = this.processInputFiles(targetFile, controlFile, options.getInputFiles());
       if (!outputFileComplete) {
-        httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(), targetFile, this.events, this.events);
+        httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(), targetFile, this.events);
       }
     } catch (IOException exception) {
       throw new RuntimeException(exception);
@@ -328,9 +336,9 @@ public class Zsync {
         // check if we should persist the file locally
         final Path savePath = options.getSaveZsyncFile();
         if (savePath == null) {
-          return httpClient.get(zsyncFile, null);
+          return httpClient.get(zsyncFile);
         } else {
-          return httpClient.get(zsyncFile, null, savePath);
+          return httpClient.get(zsyncFile, savePath);
         }
       } else {
         in = Files.newInputStream(path);
@@ -373,7 +381,7 @@ public class Zsync {
         return b.build();
       }
     });
-    return new HttpClient(clone);
+    return new HttpClient(clone, this.events);
   }
 
   private boolean processInputFiles(OutputFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles)

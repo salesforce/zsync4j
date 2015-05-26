@@ -38,25 +38,28 @@ public class HttpClient {
   private static final int MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST = 50;
 
   private final OkHttpClient okHttpClient;
+  private final ProgressMonitor progressMonitor;
 
-  public HttpClient(OkHttpClient okHttpClient) {
+  public HttpClient(OkHttpClient okHttpClient, ProgressMonitor progressMonitor) {
     checkArgument(okHttpClient != null, "httpClient cannot be null");
+    checkArgument(progressMonitor != null, "progressMonitor cannot be null");
     this.okHttpClient = okHttpClient;
+    this.progressMonitor = progressMonitor;
   }
 
   // TODO conditional request and resume
-  public InputStream get(URI uri, ProgressMonitor monitor, Path output) throws IOException {
+  public InputStream get(URI uri, Path output) throws IOException {
     final Path parent = output.getParent();
     final Path tmp = parent.resolve(output.getFileName() + ".part");
     mkdirs(parent);
-    try (InputStream in = this.get(uri, monitor)) {
+    try (InputStream in = this.get(uri)) {
       Files.copy(in, tmp, REPLACE_EXISTING);
     }
     Files.move(tmp, output, REPLACE_EXISTING, ATOMIC_MOVE);
     return Files.newInputStream(output);
   }
 
-  public InputStream get(URI uri, ProgressMonitor monitor) throws IOException {
+  public InputStream get(URI uri) throws IOException {
     final Request request = new Request.Builder().url(uri.toString()).build();
     final Response response = this.okHttpClient.newCall(request).execute();
 
@@ -69,22 +72,22 @@ public class HttpClient {
         throw new IOException("Http request for resource " + uri + " returned unexpected http code: " + response.code());
     }
 
-    return this.inputStream(response, monitor);
+    return this.inputStream(response);
   }
 
 
-  public void partialGet(URI uri, List<Range> allRanges, RangeReceiver receiver, EventManager events,
-      ProgressMonitor monitor) throws IOException {
+  public void partialGet(URI uri, List<Range> allRanges, RangeReceiver receiver, EventManager events)
+      throws IOException {
     List<List<Range>> chunkedRanges = Lists.partition(allRanges, MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST);
     for (List<Range> rangeChunk : chunkedRanges) {
       events.blocksRequestStarted(rangeChunk);
-      this.partialGetInternal(uri, rangeChunk, receiver, events, monitor);
+      this.partialGetInternal(uri, rangeChunk, receiver, events);
       events.blocksRequestComplete(rangeChunk);
     }
   }
 
-  private void partialGetInternal(URI uri, List<Range> ranges, RangeReceiver receiver, EventManager events,
-      ProgressMonitor monitor) throws IOException {
+  private void partialGetInternal(URI uri, List<Range> ranges, RangeReceiver receiver, EventManager events)
+      throws IOException {
     final Set<Range> remaining = new LinkedHashSet<>(ranges);
 
     while (!remaining.isEmpty()) {
@@ -110,15 +113,15 @@ public class HttpClient {
       final MediaType mediaType = MediaType.parse(contentType);
       if ("multipart".equals(mediaType.type())) {
         final byte[] boundary = getBoundary(mediaType);
-        this.handleMultiPartBody(response, receiver, remaining, events, monitor, boundary);
+        this.handleMultiPartBody(response, receiver, remaining, events, boundary);
       } else {
-        this.handleSinglePartBody(response, receiver, remaining, events, monitor);
+        this.handleSinglePartBody(response, receiver, remaining, events);
       }
     }
   }
 
-  void handleSinglePartBody(Response response, RangeReceiver receiver, final Set<Range> remaining, EventManager events,
-      ProgressMonitor monitor) throws IOException {
+  void handleSinglePartBody(Response response, RangeReceiver receiver, final Set<Range> remaining, EventManager events)
+      throws IOException {
     final String contentRange = response.header("Content-Range");
     if (contentRange == null) {
       throw new IOException("Content-Range header missing");
@@ -130,17 +133,14 @@ public class HttpClient {
       throw new IOException("Received range " + range + " not one of requested " + remaining);
     }
 
-    InputStream in = response.body().byteStream();
-    if (monitor != null) {
-      in = new ProgressMonitorInputStream(in, range.size(), monitor);
-    }
+    InputStream in = this.inputStream(response);
     receiver.receive(range, in);
     events.blockProcessingComplete(range);
   }
 
   void handleMultiPartBody(Response response, RangeReceiver receiver, final Set<Range> remaining, EventManager events,
-      ProgressMonitor monitor, byte[] boundary) {
-    try (InputStream in = this.inputStream(response, monitor); InputStream buffered = new BufferedInputStream(in)) {
+      byte[] boundary) {
+    try (InputStream in = this.inputStream(response); InputStream buffered = new BufferedInputStream(in)) {
       Range range;
       while ((range = this.nextPart(buffered, boundary)) != null) {
         // technically it's OK for server to combine or re-order ranges. However, since we
@@ -158,10 +158,10 @@ public class HttpClient {
     }
   }
 
-  private InputStream inputStream(Response response, ProgressMonitor monitor) {
+  private InputStream inputStream(Response response) {
     final ResponseBody body = response.body();
     final InputStream in = body.byteStream();
-    return monitor == null ? in : new ProgressMonitorInputStream(in, body.contentLength(), monitor);
+    return new ProgressMonitorInputStream(in, body.contentLength(), this.progressMonitor);
   }
 
   private Range nextPart(InputStream in, byte[] boundary) throws IOException {

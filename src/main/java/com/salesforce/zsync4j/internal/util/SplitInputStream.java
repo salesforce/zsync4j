@@ -22,36 +22,41 @@ public class SplitInputStream extends InputStream {
 
   @Override
   public int read() throws IOException {
-    if (pos == delimiter.length)
+    if (this.pos == this.delimiter.length) {
       return -1;
-    final int next = in.read();
-    if (next == -1)
+    }
+    final int next = this.in.read();
+    if (next == -1) {
       return -1;
-    if (next == delimiter[pos]) {
-      if (++pos == delimiter.length)
-        prefix = new ByteArrayInputStream(new byte[0], 0, 0);
+    }
+    if (next == this.delimiter[this.pos]) {
+      if (++this.pos == this.delimiter.length) {
+        this.prefix = new ByteArrayInputStream(new byte[0], 0, 0);
+      }
     } else {
-      pos = 0;
+      this.pos = 0;
     }
     return next;
   }
 
   @Override
   public int read(byte[] b, int off, int len) throws IOException {
-    if (pos == delimiter.length)
+    if (this.pos == this.delimiter.length) {
       return -1;
-    final int read = in.read(b, off, len);
-    if (read == -1)
+    }
+    final int read = this.in.read(b, off, len);
+    if (read == -1) {
       return -1;
+    }
     for (int i = off; i < off + read; i++) {
-      if (delimiter[pos] == b[i]) {
-        if (++pos == delimiter.length) {
+      if (this.delimiter[this.pos] == b[i]) {
+        if (++this.pos == this.delimiter.length) {
           final int r = i - off + 1;
-          prefix = new ByteArrayInputStream(b, i + 1, read - r);
+          this.prefix = new ByteArrayInputStream(b, i + 1, read - r);
           return r;
         }
       } else {
-        pos = 0;
+        this.pos = 0;
       }
     }
     return read;
@@ -59,18 +64,19 @@ public class SplitInputStream extends InputStream {
 
   @Override
   public void close() throws IOException {
-    in.close();
+    this.in.close();
   }
 
   public InputStream next() {
     // haven't found delimiter (either not read far enough, or underlying stream exhausted)
-    if (prefix == null)
+    if (this.prefix == null) {
       throw new IllegalStateException("delimiter not reached");
-    return new SequenceInputStream(prefix, in);
+    }
+    return new SequenceInputStream(this.prefix, this.in);
   }
 
   int getOffset() {
-    return pos;
+    return this.pos;
   }
 
 }
