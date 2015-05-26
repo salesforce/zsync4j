@@ -49,7 +49,7 @@ public class HttpClient {
     final Path parent = output.getParent();
     final Path tmp = parent.resolve(output.getFileName() + ".part");
     mkdirs(parent);
-    try (InputStream in = get(uri, monitor)) {
+    try (InputStream in = this.get(uri, monitor)) {
       Files.copy(in, tmp, REPLACE_EXISTING);
     }
     Files.move(tmp, output, REPLACE_EXISTING, ATOMIC_MOVE);
@@ -58,7 +58,7 @@ public class HttpClient {
 
   public InputStream get(URI uri, ProgressMonitor monitor) throws IOException {
     final Request request = new Request.Builder().url(uri.toString()).build();
-    final Response response = okHttpClient.newCall(request).execute();
+    final Response response = this.okHttpClient.newCall(request).execute();
 
     switch (response.code()) {
       case 200:
@@ -69,32 +69,28 @@ public class HttpClient {
         throw new IOException("Http request for resource " + uri + " returned unexpected http code: " + response.code());
     }
 
-    return inputStream(response, monitor);
+    return this.inputStream(response, monitor);
   }
 
 
-  public void partialGet(URI uri, List<Range> allRanges, RangeReceiver receiver, ProgressMonitor monitor)
-      throws IOException {
+  public void partialGet(URI uri, List<Range> allRanges, RangeReceiver receiver, EventManager events,
+      ProgressMonitor monitor) throws IOException {
     List<List<Range>> chunkedRanges = Lists.partition(allRanges, MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST);
-    long expectedBytes = 0;
-    for (Range range : allRanges) {
-      expectedBytes += range.size();
-    }
-    this.events.remoteFileProcessingStarted(url, expectedBytes, allRanges.size(), chunkedRanges.size());
     for (List<Range> rangeChunk : chunkedRanges) {
-      partialGetInternal(uri, rangeChunk, receiver, monitor);
+      events.blocksRequestStarted(rangeChunk);
+      this.partialGetInternal(uri, rangeChunk, receiver, events, monitor);
+      events.blocksRequestComplete(rangeChunk);
     }
-    this.events.remoteFileProcessingComplete();
   }
 
-  private void partialGetInternal(URI uri, List<Range> ranges, RangeReceiver receiver, ProgressMonitor monitor)
-      throws IOException {
+  private void partialGetInternal(URI uri, List<Range> ranges, RangeReceiver receiver, EventManager events,
+      ProgressMonitor monitor) throws IOException {
     final Set<Range> remaining = new LinkedHashSet<>(ranges);
 
     while (!remaining.isEmpty()) {
       final Request request =
           new Request.Builder().addHeader("Range", "bytes=" + toString(remaining)).url(uri.toString()).build();
-      final Response response = okHttpClient.newCall(request).execute();
+      final Response response = this.okHttpClient.newCall(request).execute();
 
       // TODO if the server returns 200, we may want to overwrite the whole file locally
       switch (response.code()) {
@@ -114,46 +110,52 @@ public class HttpClient {
       final MediaType mediaType = MediaType.parse(contentType);
       if ("multipart".equals(mediaType.type())) {
         final byte[] boundary = getBoundary(mediaType);
-        handleMultiPartBody(response, receiver, remaining, monitor, boundary);
+        this.handleMultiPartBody(response, receiver, remaining, events, monitor, boundary);
       } else {
-        handleSinglePartBody(response, receiver, remaining, monitor);
+        this.handleSinglePartBody(response, receiver, remaining, events, monitor);
       }
     }
   }
 
-  void handleSinglePartBody(Response response, RangeReceiver receiver, final Set<Range> remaining,
+  void handleSinglePartBody(Response response, RangeReceiver receiver, final Set<Range> remaining, EventManager events,
       ProgressMonitor monitor) throws IOException {
     final String contentRange = response.header("Content-Range");
-    if (contentRange == null)
+    if (contentRange == null) {
       throw new IOException("Content-Range header missing");
+    }
 
     final Range range = parseContentRange(contentRange);
-    if (!remaining.remove(range))
+    events.blockProcessingStarted(range);
+    if (!remaining.remove(range)) {
       throw new IOException("Received range " + range + " not one of requested " + remaining);
+    }
 
     InputStream in = response.body().byteStream();
-    if (monitor != null)
+    if (monitor != null) {
       in = new ProgressMonitorInputStream(in, range.size(), monitor);
+    }
     receiver.receive(range, in);
+    events.blockProcessingComplete(range);
   }
 
-  void handleMultiPartBody(Response response, RangeReceiver receiver, final Set<Range> remaining,
+  void handleMultiPartBody(Response response, RangeReceiver receiver, final Set<Range> remaining, EventManager events,
       ProgressMonitor monitor, byte[] boundary) {
-    try (InputStream in = inputStream(response, monitor); InputStream buffered = new BufferedInputStream(in)) {
+    try (InputStream in = this.inputStream(response, monitor); InputStream buffered = new BufferedInputStream(in)) {
       Range range;
-      while ((range = nextPart(buffered, boundary)) != null) {
+      while ((range = this.nextPart(buffered, boundary)) != null) {
         // technically it's OK for server to combine or re-order ranges. However, since we
         // already combine and sort ranges, this should not happen
-        if (!remaining.remove(range))
+        if (!remaining.remove(range)) {
           throw new RuntimeException("Received range " + range + " not one of requested " + remaining);
-
+        }
+        events.blockProcessingStarted(range);
         final InputStream part = ByteStreams.limit(buffered, range.size());
         receiver.receive(range, part);
+        events.blockProcessingComplete(range);
       }
     } catch (IOException e) {
       throw new RuntimeException("Failed to read response", e);
     }
-    this.events.blocksRequestComplete(ranges);
   }
 
   private InputStream inputStream(Response response, ProgressMonitor monitor) {

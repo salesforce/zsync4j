@@ -152,7 +152,6 @@ public class OutputFile implements RangeReceiver, Closeable {
     do {
       long transferred = this.channel.transferFrom(src, range.first, size);
       remaining -= transferred;
-      this.events.bytesDownloaded(transferred);
       this.events.bytesWritten(this.tempPath, transferred);
     } while (remaining > 0);
 

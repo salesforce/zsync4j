@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import com.salesforce.zsync4j.Zsync.Options;
+import com.salesforce.zsync4j.internal.util.ProgressMonitor;
 
 
 /**
@@ -15,7 +16,7 @@ import com.salesforce.zsync4j.Zsync.Options;
  *
  * @author bstclair
  */
-public class EventManagerImpl implements EventManager {
+public class EventManagerImpl implements EventManager, ProgressMonitor {
 
   /*
    * (non-Javadoc)
@@ -35,7 +36,7 @@ public class EventManagerImpl implements EventManager {
    * @see com.salesforce.zsync4j.internal.EventManager#controlFileDownloadStarted(java.net.URI)
    */
   @Override
-  public void controlFileDownloadStarted(URI controlFileUri) {
+  public void controlFileProcessingStarted(URI controlFileUri) {
     // TODO Auto-generated method stub
 
   }
@@ -48,7 +49,7 @@ public class EventManagerImpl implements EventManager {
    * .internal.ControlFile)
    */
   @Override
-  public void controlFileDownloadComplete(ControlFile controlFile) {
+  public void controlFileProcessingComplete(ControlFile controlFile) {
     // TODO Auto-generated method stub
 
   }
@@ -226,6 +227,11 @@ public class EventManagerImpl implements EventManager {
 
   }
 
+  @Override
+  public void outputFileResolved(Path outputFile) {
+
+  }
+
   /*
    * (non-Javadoc)
    * 
@@ -236,4 +242,15 @@ public class EventManagerImpl implements EventManager {
     // TODO Auto-generated method stub
 
   }
+
+  @Override
+  public void begin(long size) {}
+
+  @Override
+  public void progress(int completed) {
+    this.bytesDownloaded(completed);
+  }
+
+  @Override
+  public void done() {}
 }

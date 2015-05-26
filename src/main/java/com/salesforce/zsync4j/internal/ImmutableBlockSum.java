@@ -26,10 +26,10 @@ public class ImmutableBlockSum extends BlockSum {
     int rsum = 0;
     for (int i = rsumBytes - 1; i >= 0; i--) {
       int next = in.read();
-      events.bytesDownloaded(1);
       if (next == -1) {
         throw new IllegalArgumentException("Failed to read rsum: premature end of file");
       }
+      events.bytesDownloaded(1);
       rsum |= next << (i * 8);
     }
     return rsum;

@@ -17,11 +17,13 @@ import com.salesforce.zsync4j.Zsync.Options;
  */
 public interface EventManager {
 
+  void outputFileResolved(Path outputFile);
+
   void transferStarted(URI requestedZsyncUri, Options options);
 
-  void controlFileDownloadStarted(URI controlFileUri);
+  void controlFileProcessingStarted(URI controlFileUri);
 
-  void controlFileDownloadComplete(ControlFile controlFile);
+  void controlFileProcessingComplete(ControlFile controlFile);
 
   void inputFileProcessingStarted(Path inputFile);
 

@@ -14,7 +14,9 @@ public class ControlFile {
     final List<? extends BlockSum> blockSums =
         ImmutableBlockSum.readSums(firstPart.next(), header.getNumBlocks(), header.getRsumBytes(),
             header.getChecksumBytes(), events);
-    return new ControlFile(header, blockSums);
+    ControlFile controlFile = new ControlFile(header, blockSums);
+    events.controlFileProcessingComplete(controlFile);
+    return controlFile;
   }
 
   private final Header header;
