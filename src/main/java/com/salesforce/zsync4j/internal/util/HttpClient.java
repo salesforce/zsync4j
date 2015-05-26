@@ -1,5 +1,6 @@
 package com.salesforce.zsync4j.internal.util;
 
+import static com.google.common.base.Joiner.on;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.salesforce.zsync4j.internal.util.ZsyncUtil.mkdirs;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
@@ -14,12 +15,11 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.google.common.collect.Lists;
+import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
 import com.google.common.net.MediaType;
 import com.salesforce.zsync4j.internal.EventManager;
@@ -75,30 +75,21 @@ public class HttpClient {
     return this.inputStream(response);
   }
 
-
-  public void partialGet(URI uri, List<Range> allRanges, RangeReceiver receiver, EventManager events)
-      throws IOException {
-    List<List<Range>> chunkedRanges = Lists.partition(allRanges, MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST);
-    for (List<Range> rangeChunk : chunkedRanges) {
-      events.blocksRequestStarted(rangeChunk);
-      this.partialGetInternal(uri, rangeChunk, receiver, events);
-      events.blocksRequestComplete(rangeChunk);
-    }
-  }
-
-  private void partialGetInternal(URI uri, List<Range> ranges, RangeReceiver receiver, EventManager events)
-      throws IOException {
+  public void partialGet(URI uri, List<Range> ranges, RangeReceiver receiver, EventManager events) throws IOException {
     final Set<Range> remaining = new LinkedHashSet<>(ranges);
-
     while (!remaining.isEmpty()) {
-      final Request request =
-          new Request.Builder().addHeader("Range", "bytes=" + toString(remaining)).url(uri.toString()).build();
+      final int limit = Math.min(remaining.size(), MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST);
+      final String rangeHeader = "bytes=" + on(',').join(Iterables.limit(ranges, limit));
+
+      final Request request = new Request.Builder().addHeader("Range", rangeHeader).url(uri.toString()).build();
       final Response response = this.okHttpClient.newCall(request).execute();
 
-      // TODO if the server returns 200, we may want to overwrite the whole file locally
       switch (response.code()) {
         case 206:
           break;
+        case 200:
+          receiver.receive(new Range(0, response.body().contentLength()), this.inputStream(response));
+          return;
         case 404:
           throw new FileNotFoundException(uri.toString());
         default:
@@ -239,18 +230,6 @@ public class HttpClient {
     }
     final byte[] boundary = value.get(0).getBytes(ISO_8859_1);
     return boundary;
-  }
-
-  static String toString(final Iterable<? extends Range> ranges) {
-    final Iterator<? extends Range> it = ranges.iterator();
-    if (!it.hasNext()) {
-      throw new RuntimeException("no ranges");
-    }
-    final StringBuilder b = new StringBuilder(it.next().toString());
-    while (it.hasNext()) {
-      b.append(",").append(it.next().toString());
-    }
-    return b.toString();
   }
 
   static Range parseContentRange(String value) {
