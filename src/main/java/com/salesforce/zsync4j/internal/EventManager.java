@@ -5,10 +5,9 @@ package com.salesforce.zsync4j.internal;
 
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.List;
 
 import com.salesforce.zsync4j.Zsync.Options;
-import com.salesforce.zsync4j.internal.util.HttpClient.TransferListener;
+import com.salesforce.zsync4j.internal.util.HttpClient.RangeTransferListener;
 
 /**
  * Maintains state relevant for events, and constructs and throws externally published events as
@@ -16,7 +15,7 @@ import com.salesforce.zsync4j.internal.util.HttpClient.TransferListener;
  *
  * @author bstclair
  */
-public interface EventManager extends TransferListener {
+public interface EventManager extends RangeTransferListener {
 
   void outputFileResolved(Path outputFile);
 
@@ -33,14 +32,6 @@ public interface EventManager extends TransferListener {
   void remoteFileProcessingStarted(URI remoteUri, long expectedBytes, long expectedBlocks, long expectedRequests);
 
   void remoteFileProcessingComplete();
-
-  void blocksRequestStarted(List<Range> blocks);
-
-  void blocksRequestComplete(List<Range> blocks);
-
-  void blockProcessingStarted(Range block);
-
-  void blockProcessingComplete(Range block);
 
   void bytesWritten(Path file, long bytes);
 

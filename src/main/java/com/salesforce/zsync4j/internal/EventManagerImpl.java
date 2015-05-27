@@ -5,7 +5,6 @@ package com.salesforce.zsync4j.internal;
 
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.List;
 
 import com.salesforce.zsync4j.Zsync.Options;
 import com.salesforce.zsync4j.ZsyncListener;
@@ -55,16 +54,16 @@ public class EventManagerImpl implements EventManager {
   public void remoteFileProcessingComplete() {}
 
   @Override
-  public void blocksRequestStarted(List<Range> blocks) {}
+  public void rangeRequestStarted(Iterable<? extends Range> ranges) {}
 
   @Override
-  public void blocksRequestComplete(List<Range> blocks) {}
+  public void rangeRequestComplete(Iterable<? extends Range> ranges) {}
 
   @Override
-  public void blockProcessingStarted(Range block) {}
+  public void rangeProcessingStarted(Range range) {}
 
   @Override
-  public void blockProcessingComplete(Range block) {}
+  public void rangeProcessingComplete(Range range) {}
 
   @Override
   public void bytesWritten(Path file, long bytes) {}
@@ -100,17 +99,17 @@ public class EventManagerImpl implements EventManager {
   }
 
   @Override
-  public void beginTransfer(String uri, long totalBytes) {
+  public void transferStarted(String uri, long totalBytes) {
     // TODO Auto-generated method stub
 
   }
 
   @Override
-  public void transferred(int bytes) {
+  public void bytesDownloaded(int bytes) {
     this.totalBytesDownloaded += bytes;
   }
 
   @Override
-  public void done() {}
+  public void transferComplete() {}
 
 }

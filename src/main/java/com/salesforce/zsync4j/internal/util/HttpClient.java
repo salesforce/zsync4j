@@ -2,7 +2,9 @@ package com.salesforce.zsync4j.internal.util;
 
 import static com.google.common.base.Joiner.on;
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.Iterables.limit;
 import static com.salesforce.zsync4j.internal.util.ZsyncUtil.mkdirs;
+import static java.lang.Math.min;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
@@ -20,7 +22,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
 import com.google.common.net.MediaType;
 import com.salesforce.zsync4j.internal.Range;
@@ -33,11 +34,24 @@ public class HttpClient {
 
   public static interface TransferListener {
 
-    void beginTransfer(String uri, long totalBytes);
+    void transferStarted(String uri, long totalBytes);
 
-    void transferred(int bytes);
+    void bytesDownloaded(int bytes);
 
-    void done();
+    void transferComplete();
+
+  }
+
+  public static interface RangeTransferListener extends TransferListener {
+
+    void rangeRequestStarted(Iterable<? extends Range> ranges);
+
+    void rangeRequestComplete(Iterable<? extends Range> ranges);
+
+    // TODO should these really be here?
+    void rangeProcessingStarted(Range range);
+
+    void rangeProcessingComplete(Range range);
 
   }
 
@@ -52,14 +66,14 @@ public class HttpClient {
     public ListeningInputStream(InputStream in, TransferListener listener, Response response) {
       super(in);
       this.listener = listener;
-      this.listener.beginTransfer(response.request().urlString(), response.body().contentLength());
+      this.listener.transferStarted(response.request().urlString(), response.body().contentLength());
     }
 
     @Override
     public int read() throws IOException {
       final int i = super.read();
       if (i >= 0) {
-        this.listener.transferred(1);
+        this.listener.bytesDownloaded(1);
       }
       return i;
     }
@@ -68,7 +82,7 @@ public class HttpClient {
     public int read(byte[] b) throws IOException {
       final int i = super.read(b);
       if (i >= 0) {
-        this.listener.transferred(i);
+        this.listener.bytesDownloaded(i);
       }
       return i;
     }
@@ -77,7 +91,7 @@ public class HttpClient {
     public int read(byte[] b, int off, int len) throws IOException {
       final int i = super.read(b, off, len);
       if (i >= 0) {
-        this.listener.transferred(i);
+        this.listener.bytesDownloaded(i);
       }
       return i;
     }
@@ -85,7 +99,7 @@ public class HttpClient {
     @Override
     public void close() throws IOException {
       super.close();
-      this.listener.done();
+      this.listener.transferComplete();
     }
   }
 
@@ -126,14 +140,15 @@ public class HttpClient {
     return inputStream(response, listener);
   }
 
-  public void partialGet(URI uri, List<Range> ranges, RangeReceiver receiver, TransferListener listener)
+  public void partialGet(URI uri, List<Range> ranges, RangeReceiver receiver, RangeTransferListener listener)
       throws IOException {
     final Set<Range> remaining = new LinkedHashSet<>(ranges);
     while (!remaining.isEmpty()) {
-      final int limit = Math.min(remaining.size(), MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST);
-      final String rangeHeader = "bytes=" + on(',').join(Iterables.limit(remaining, limit));
+      final Iterable<Range> next = limit(remaining, min(remaining.size(), MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST));
+      listener.rangeRequestStarted(next);
 
-      final Request request = new Request.Builder().addHeader("Range", rangeHeader).url(uri.toString()).build();
+      final Request request =
+          new Request.Builder().addHeader("Range", "bytes=" + on(',').join(next)).url(uri.toString()).build();
       final Response response = this.okHttpClient.newCall(request).execute();
 
       switch (response.code()) {
@@ -160,11 +175,13 @@ public class HttpClient {
       } else {
         this.handleSinglePartBody(response, receiver, remaining, listener);
       }
+
+      listener.rangeRequestComplete(ranges);
     }
   }
 
   void handleSinglePartBody(Response response, RangeReceiver receiver, final Set<Range> remaining,
-      TransferListener listener) throws IOException {
+      RangeTransferListener listener) throws IOException {
     final String contentRange = response.header("Content-Range");
     if (contentRange == null) {
       throw new IOException("Content-Range header missing");
@@ -176,11 +193,13 @@ public class HttpClient {
     }
 
     InputStream in = inputStream(response, listener);
+    listener.rangeProcessingStarted(range);
     receiver.receive(range, in);
+    listener.rangeProcessingComplete(range);
   }
 
   void handleMultiPartBody(Response response, RangeReceiver receiver, final Set<Range> remaining,
-      TransferListener listener, byte[] boundary) {
+      RangeTransferListener listener, byte[] boundary) {
     try (InputStream in = inputStream(response, listener); InputStream buffered = new BufferedInputStream(in)) {
       Range range;
       while ((range = this.nextPart(buffered, boundary)) != null) {
@@ -190,7 +209,9 @@ public class HttpClient {
           throw new RuntimeException("Received range " + range + " not one of requested " + remaining);
         }
         final InputStream part = ByteStreams.limit(buffered, range.size());
+        listener.rangeProcessingStarted(range);
         receiver.receive(range, part);
+        listener.rangeProcessingComplete(range);
       }
     } catch (IOException e) {
       throw new RuntimeException("Failed to read response", e);
