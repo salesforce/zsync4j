@@ -339,7 +339,8 @@ public class Zsync {
         if (savePath == null) {
           return httpClient.get(zsyncFile, this.events);
         } else {
-          return httpClient.get(zsyncFile, savePath, this.events);
+          httpClient.get(zsyncFile, savePath, this.events);
+          return Files.newInputStream(savePath);
         }
       } else {
         in = Files.newInputStream(path);

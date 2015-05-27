@@ -112,18 +112,35 @@ public class HttpClient {
     this.okHttpClient = okHttpClient;
   }
 
-  // TODO conditional request and resume
-  public InputStream get(URI uri, Path output, TransferListener listener) throws IOException {
+  /**
+   * Stores the resource referred to by the given uri at the given output location. Progress of the
+   * file download can be monitored via the optional transfer listener.
+   *
+   * @param uri
+   * @param output
+   * @param listener
+   * @throws IOException
+   */
+  public void get(URI uri, Path output, TransferListener listener) throws IOException {
     final Path parent = output.getParent();
     final Path tmp = parent.resolve(output.getFileName() + ".part");
     mkdirs(parent);
+    // TODO conditional request and resume
     try (InputStream in = get(uri, listener)) {
       Files.copy(in, tmp, REPLACE_EXISTING);
     }
     Files.move(tmp, output, REPLACE_EXISTING, ATOMIC_MOVE);
-    return Files.newInputStream(output);
   }
 
+  /**
+   * Opens a connection to the remote resource referred to by the given uri. The returned stream is
+   * decorated with to report download progress to the given listener.
+   *
+   * @param uri
+   * @param listener
+   * @return
+   * @throws IOException
+   */
   public InputStream get(URI uri, TransferListener listener) throws IOException {
     final Request request = new Request.Builder().url(uri.toString()).build();
     final Response response = this.okHttpClient.newCall(request).execute();
@@ -140,6 +157,15 @@ public class HttpClient {
     return inputStream(response, listener);
   }
 
+  /**
+   * Retrieves the requested ranges for the resource referred to by the given uri.
+   *
+   * @param uri
+   * @param ranges
+   * @param receiver
+   * @param listener
+   * @throws IOException
+   */
   public void partialGet(URI uri, List<Range> ranges, RangeReceiver receiver, RangeTransferListener listener)
       throws IOException {
     final Set<Range> remaining = new LinkedHashSet<>(ranges);
