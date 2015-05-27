@@ -29,6 +29,12 @@ import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 import com.squareup.okhttp.ResponseBody;
 
+/**
+ * A thin wrapper around {@link OkHttpClient} to facilitate full and partial download of resources
+ * with
+ *
+ * @author bbusjaeger
+ */
 public class HttpClient {
 
   /**
@@ -40,9 +46,9 @@ public class HttpClient {
 
     /**
      * Called once after the response header is parsed to inform the listener that the given number
-     * of bytes will retrieved for the given resource. The resource URI is the result of following
-     * redirects and challenges. The total number of bytes is derived from the Content-Length
-     * header, so it may be -1.
+     * of bytes will be retrieved for the given resource. The resource URI is the result of
+     * following redirects and challenges. The total number of bytes is derived from the
+     * Content-Length header, so it may be -1.
      *
      * @param uri Resource from which the entity is being retrieved. May differ from original
      *        request URI.
@@ -50,10 +56,31 @@ public class HttpClient {
      */
     void transferStarted(String uri, long totalBytes);
 
-    void bytesDownloaded(int bytes);
+    /**
+     * Called whenever some number of bytes have been downloaded from the remote resource.
+     *
+     * @param bytes Number of bytes downloaded
+     */
+    void transferProgressed(int bytes);
 
+    /**
+     * Called if an IOException is encountered transferring bytes for the remote resource.
+     *
+     * @param exception the exception thrown by the transfer layer
+     */
+    void transferFailed(IOException exception);
+
+    /**
+     * Called when all bytes for the remote resource have been downloaded.
+     */
     void transferComplete();
 
+    /**
+     * Called when the transfer is closed. This method may be called without calling
+     * {@link #transferFailed(IOException)} or {@link #transferComplete()}, in which case the
+     * transfer was aborted prematurely. Most likely, because an error occurred processing the
+     * already transferred bytes.
+     */
     void transferClosed();
   }
 
@@ -86,9 +113,15 @@ public class HttpClient {
 
     @Override
     public int read() throws IOException {
-      final int i = super.read();
+      final int i;
+      try {
+        i = super.read();
+      } catch (IOException e) {
+        this.listener.transferFailed(e);
+        throw e;
+      }
       if (i >= 0) {
-        this.listener.bytesDownloaded(1);
+        this.listener.transferProgressed(1);
       } else {
         this.listener.transferComplete();
       }
@@ -97,9 +130,15 @@ public class HttpClient {
 
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
-      final int i = super.read(b, off, len);
+      final int i;
+      try {
+        i = super.read(b, off, len);
+      } catch (IOException e) {
+        this.listener.transferFailed(e);
+        throw e;
+      }
       if (i >= 0) {
-        this.listener.bytesDownloaded(i);
+        this.listener.transferProgressed(i);
       } else {
         this.listener.transferComplete();
       }
@@ -108,8 +147,11 @@ public class HttpClient {
 
     @Override
     public void close() throws IOException {
-      super.close();
-      this.listener.transferClosed();
+      try {
+        super.close();
+      } finally {
+        this.listener.transferClosed();
+      }
     }
   }
 
@@ -123,8 +165,8 @@ public class HttpClient {
   }
 
   /**
-   * Stores the resource referred to by the given uri at the given output location. Progress of the file download can be
-   * monitored via the optional transfer listener.
+   * Stores the resource referred to by the given uri at the given output location. Progress of the
+   * file download can be monitored via the optional transfer listener.
    *
    * @param uri
    * @param output
@@ -143,8 +185,8 @@ public class HttpClient {
   }
 
   /**
-   * Opens a connection to the remote resource referred to by the given uri. The returned stream is decorated with to
-   * report download progress to the given listener.
+   * Opens a connection to the remote resource referred to by the given uri. The returned stream is
+   * decorated with to report download progress to the given listener.
    *
    * @param uri
    * @param listener

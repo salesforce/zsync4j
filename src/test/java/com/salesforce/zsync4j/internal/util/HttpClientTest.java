@@ -20,6 +20,7 @@ import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Protocol;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
+import com.squareup.okhttp.ResponseBody;
 
 public class HttpClientTest {
 
@@ -93,6 +94,20 @@ public class HttpClientTest {
     Request fakeRequest = new Request.Builder().url("url").build();
     return new Response.Builder().protocol(Protocol.HTTP_2).request(fakeRequest).code(code).build();
   }
+
+  @Test
+  public void testGetWithProgress() throws IOException {
+    final ResponseBody body = mock(ResponseBody.class);
+    when(body.contentLength()).thenReturn(1024l);
+    final Response response = new Response.Builder().body(body).code(200).build();
+
+    final OkHttpClient mockHttpClient = mock(OkHttpClient.class);
+    final Call mockCall = mock(Call.class);
+    when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
+    when(mockCall.execute()).thenReturn(response);
+
+  }
+
 
   private List<Range> createSomeRanges(int numberOfRangesToCreate) {
     List<Range> ranges = new ArrayList<>(numberOfRangesToCreate);

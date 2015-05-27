@@ -3,6 +3,7 @@
  */
 package com.salesforce.zsync4j.internal;
 
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 
@@ -103,7 +104,7 @@ public class EventManagerImpl implements EventManager {
   public void transferStarted(String uri, long totalBytes) {}
 
   @Override
-  public void bytesDownloaded(int bytes) {
+  public void transferProgressed(int bytes) {
     this.totalBytesDownloaded += bytes;
   }
 
@@ -112,5 +113,8 @@ public class EventManagerImpl implements EventManager {
 
   @Override
   public void transferClosed() {}
+
+  @Override
+  public void transferFailed(IOException exception) {}
 
 }
