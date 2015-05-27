@@ -48,11 +48,13 @@ public class OutputFile implements RangeReceiver, Closeable {
   public OutputFile(Path path, ControlFile controlFile, EventManager events) throws IOException {
     this.path = path;
     this.events = events;
-    this.tempPath =
-        path.getParent() == null ? Paths.get(path.getFileName().toString() + ".part") : path.getParent().resolve(
-            path.getFileName().toString() + ".part");
-    if (path.getParent() != null) {
-      mkdirs(path.getParent());
+    final String tmpName = path.getFileName().toString() + ".part";
+    final Path parent = path.getParent();
+    if (parent != null) {
+      mkdirs(parent);
+      this.tempPath = parent.resolve(tmpName);
+    } else {
+      this.tempPath = Paths.get(tmpName);
     }
     this.channel = FileChannel.open(this.tempPath, CREATE, WRITE, READ);
 
