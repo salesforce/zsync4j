@@ -97,9 +97,11 @@ public class HttpClientTest {
 
   @Test
   public void testGetWithProgress() throws IOException {
+    Request request = new Request.Builder().url("http://url").build();
     final ResponseBody body = mock(ResponseBody.class);
     when(body.contentLength()).thenReturn(1024l);
-    final Response response = new Response.Builder().body(body).code(200).build();
+    final Response response =
+        new Response.Builder().body(body).protocol(Protocol.HTTP_2).request(request).code(200).build();
 
     final OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     final Call mockCall = mock(Call.class);
