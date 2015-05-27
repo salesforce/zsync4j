@@ -79,15 +79,6 @@ public class HttpClient {
     }
 
     @Override
-    public int read(byte[] b) throws IOException {
-      final int i = super.read(b);
-      if (i >= 0) {
-        this.listener.bytesDownloaded(i);
-      }
-      return i;
-    }
-
-    @Override
     public int read(byte[] b, int off, int len) throws IOException {
       final int i = super.read(b, off, len);
       if (i >= 0) {
@@ -113,8 +104,8 @@ public class HttpClient {
   }
 
   /**
-   * Stores the resource referred to by the given uri at the given output location. Progress of the
-   * file download can be monitored via the optional transfer listener.
+   * Stores the resource referred to by the given uri at the given output location. Progress of the file download can be
+   * monitored via the optional transfer listener.
    *
    * @param uri
    * @param output
@@ -126,15 +117,15 @@ public class HttpClient {
     final Path tmp = parent.resolve(output.getFileName() + ".part");
     mkdirs(parent);
     // TODO conditional request and resume
-    try (InputStream in = get(uri, listener)) {
+    try (InputStream in = this.get(uri, listener)) {
       Files.copy(in, tmp, REPLACE_EXISTING);
     }
     Files.move(tmp, output, REPLACE_EXISTING, ATOMIC_MOVE);
   }
 
   /**
-   * Opens a connection to the remote resource referred to by the given uri. The returned stream is
-   * decorated with to report download progress to the given listener.
+   * Opens a connection to the remote resource referred to by the given uri. The returned stream is decorated with to
+   * report download progress to the given listener.
    *
    * @param uri
    * @param listener
