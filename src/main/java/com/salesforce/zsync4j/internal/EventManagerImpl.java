@@ -8,6 +8,7 @@ import java.nio.file.Path;
 
 import com.salesforce.zsync4j.Zsync.Options;
 import com.salesforce.zsync4j.ZsyncListener;
+import com.salesforce.zsync4j.internal.util.Range;
 
 
 /**
@@ -99,10 +100,7 @@ public class EventManagerImpl implements EventManager {
   }
 
   @Override
-  public void transferStarted(String uri, long totalBytes) {
-    // TODO Auto-generated method stub
-
-  }
+  public void transferStarted(String uri, long totalBytes) {}
 
   @Override
   public void bytesDownloaded(int bytes) {
@@ -111,5 +109,8 @@ public class EventManagerImpl implements EventManager {
 
   @Override
   public void transferComplete() {}
+
+  @Override
+  public void transferClosed() {}
 
 }

@@ -7,7 +7,7 @@ import java.net.URI;
 import java.nio.file.Path;
 
 import com.salesforce.zsync4j.Zsync.Options;
-import com.salesforce.zsync4j.internal.util.HttpClient.RangeTransferListener;
+import com.salesforce.zsync4j.internal.util.HttpClient.PartialResponseBodyTransferListener;
 
 /**
  * Maintains state relevant for events, and constructs and throws externally published events as
@@ -15,7 +15,7 @@ import com.salesforce.zsync4j.internal.util.HttpClient.RangeTransferListener;
  *
  * @author bstclair
  */
-public interface EventManager extends RangeTransferListener {
+public interface EventManager extends PartialResponseBodyTransferListener {
 
   void outputFileResolved(Path outputFile);
 

@@ -13,9 +13,8 @@ import java.util.List;
 import org.junit.Test;
 
 import com.google.common.collect.Lists;
-import com.salesforce.zsync4j.internal.Range;
+import com.salesforce.zsync4j.internal.util.HttpClient.PartialResponseBodyTransferListener;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
-import com.salesforce.zsync4j.internal.util.HttpClient.RangeTransferListener;
 import com.squareup.okhttp.Call;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Protocol;
@@ -41,7 +40,7 @@ public class HttpClientTest {
     // Arrange
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
-    RangeTransferListener listener = mock(RangeTransferListener.class);
+    PartialResponseBodyTransferListener listener = mock(PartialResponseBodyTransferListener.class);
     List<Range> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
     IOException expected = new IOException("IO");
@@ -65,7 +64,7 @@ public class HttpClientTest {
     List<Integer> responsesToTest = Lists.newArrayList(500, 413); // Add whatever other ones we want
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
-    RangeTransferListener listener = mock(RangeTransferListener.class);
+    PartialResponseBodyTransferListener listener = mock(PartialResponseBodyTransferListener.class);
     List<Range> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
 

@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.salesforce.zsync4j.OutputFileValidationException;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
+import com.salesforce.zsync4j.internal.util.Range;
 import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
 import com.salesforce.zsync4j.internal.util.ZsyncUtil;
 
