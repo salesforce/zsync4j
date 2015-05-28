@@ -15,7 +15,7 @@ import com.salesforce.zsync4j.internal.util.HttpClient.PartialResponseBodyTransf
  *
  * @author bstclair
  */
-public interface EventManager extends PartialResponseBodyTransferListener {
+public interface EventDispatcher extends PartialResponseBodyTransferListener {
 
   void outputFileResolved(Path outputFile);
 

@@ -44,9 +44,9 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final FileChannel channel;
   private final boolean[] completed;
   private int blocksRemaining;
-  private EventManager events;
+  private EventDispatcher events;
 
-  public OutputFile(Path path, ControlFile controlFile, EventManager events) throws IOException {
+  public OutputFile(Path path, ControlFile controlFile, EventDispatcher events) throws IOException {
     this.path = path;
     this.events = events;
     final String tmpName = path.getFileName().toString() + ".part";
