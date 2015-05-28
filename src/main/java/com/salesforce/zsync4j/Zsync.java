@@ -33,8 +33,8 @@ import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 
 /**
- * Zsync download client: reduces the number of bytes retrieved from a remote server by drawing unchanged parts of the
- * file from a set of local input files.
+ * Zsync download client: reduces the number of bytes retrieved from a remote server by drawing
+ * unchanged parts of the file from a set of local input files.
  *
  * @see <a href="http://zsync.moria.org.uk/">http://zsync.moria.org.uk/</a>
  *
@@ -109,8 +109,8 @@ public class Zsync {
     }
 
     /**
-     * Adds an input file from which matching blocks are transferred to the output file to reduce the ranges that have
-     * to be fetched from the remote source.
+     * Adds an input file from which matching blocks are transferred to the output file to reduce
+     * the ranges that have to be fetched from the remote source.
      *
      * @param inputFile
      * @return
@@ -121,8 +121,8 @@ public class Zsync {
     }
 
     /**
-     * Input files to construct output file from. May be empty in which case the full content is retrieved from the
-     * remote location.
+     * Input files to construct output file from. May be empty in which case the full content is
+     * retrieved from the remote location.
      *
      * @return
      */
@@ -151,8 +151,9 @@ public class Zsync {
     }
 
     /**
-     * Location at which to store the output file. If not set, output will be stored in the current working directory
-     * using the <code>Filename</code> header from the control file as the relative path.
+     * Location at which to store the output file. If not set, output will be stored in the current
+     * working directory using the <code>Filename</code> header from the control file as the
+     * relative path.
      *
      * @return
      */
@@ -161,9 +162,9 @@ public class Zsync {
     }
 
     /**
-     * Corresponds to the zsync -k parameter: the location at which to store the zsync control file. This option only
-     * takes effect if the zsync URI passed as the first argument to {@link Zsync#zsync(URI, Options)} is a remote
-     * (http) URL.
+     * Corresponds to the zsync -k parameter: the location at which to store the zsync control file.
+     * This option only takes effect if the zsync URI passed as the first argument to
+     * {@link Zsync#zsync(URI, Options)} is a remote (http) URL.
      *
      * @param saveZsyncFile
      * @return
@@ -183,8 +184,9 @@ public class Zsync {
     }
 
     /**
-     * Corresponds to the zsync -u parameter: the source URI from which the zsync file was originally retrieved. Takes
-     * affect only if the first parameter to the {@link Zsync#zsync(URI, Options)} method refers to a local file.
+     * Corresponds to the zsync -u parameter: the source URI from which the zsync file was
+     * originally retrieved. Takes affect only if the first parameter to the
+     * {@link Zsync#zsync(URI, Options)} method refers to a local file.
      *
      * @param zsyncUri
      * @return
@@ -264,8 +266,8 @@ public class Zsync {
   }
 
   /**
-   * Retrieves the remote file pointed to by the given zsync control file. The supplied listener is called back to as
-   * data is downloaded and the output file is written.
+   * Retrieves the remote file pointed to by the given zsync control file. The supplied listener is
+   * called back to as data is downloaded and the output file is written.
    *
    * @param zsyncFile
    * @param options
@@ -313,13 +315,15 @@ public class Zsync {
   }
 
   /**
-   * Opens the zsync file referred to by the given URI for read. If the file refers to a local file system path, the
-   * local file is opened directly. Otherwise, if the file is remote and {@link Options#getSaveZsyncFile()} is
-   * specified, the remote file is stored locally in the given location first and then opened for read locally. If the
-   * file is remote and no save location is specified, the file is opened for read over the remote connection.
+   * Opens the zsync file referred to by the given URI for read. If the file refers to a local file
+   * system path, the local file is opened directly. Otherwise, if the file is remote and
+   * {@link Options#getSaveZsyncFile()} is specified, the remote file is stored locally in the given
+   * location first and then opened for read locally. If the file is remote and no save location is
+   * specified, the file is opened for read over the remote connection.
    * <p>
-   * If the file is remote, the method always calls {@link Options#setZsyncFileSource(URI)} on the passed in options
-   * parameter, so that relative file URLs in the control file can later be resolved against it.
+   * If the file is remote, the method always calls {@link Options#setZsyncFileSource(URI)} on the
+   * passed in options parameter, so that relative file URLs in the control file can later be
+   * resolved against it.
    *
    * @param zsyncFile
    * @param httpClient
@@ -358,9 +362,10 @@ public class Zsync {
   }
 
   /**
-   * Creates an HTTP client configured with the given credentials map. Uses a shallow copy of the OkHttpClient to not
-   * modify the original copy per <a
-   * href="https://github.com/square/okhttp/wiki/Recipes#per-call-configuration">Per-call Configuration</a>
+   * Creates an HTTP client configured with the given credentials map. Uses a shallow copy of the
+   * OkHttpClient to not modify the original copy per <a
+   * href="https://github.com/square/okhttp/wiki/Recipes#per-call-configuration">Per-call
+   * Configuration</a>
    *
    * @param credentials
    * @return
@@ -375,13 +380,10 @@ public class Zsync {
 
       @Override
       public Request authenticate(Proxy proxy, Response response) throws IOException {
-        final String host = response.request().uri().getHost();
-        final Credentials creds = credentials.get(host);
-        final Request.Builder b = response.request().newBuilder();
-        if (creds != null) {
-          b.header("Authorization", com.squareup.okhttp.Credentials.basic(creds.getUsername(), creds.getPassword()));
-        }
-        return b.build();
+        final Credentials creds = credentials.get(response.request().uri().getHost());
+        return creds == null ? null : response.request().newBuilder()
+            .header("Authorization", com.squareup.okhttp.Credentials.basic(creds.getUsername(), creds.getPassword()))
+            .build();
       }
     });
     return new HttpClient(clone);
@@ -401,8 +403,9 @@ public class Zsync {
     this.events.inputFileProcessingStarted(inputFile);
     try (final FileChannel channel = FileChannel.open(inputFile)) {
       final BlockMatcher matcher = BlockMatcher.create(controlFile);
-      final ReadableByteChannel c = zeroPad(channel, controlFile.getHeader());
-      final RollingBuffer buffer = new RollingBuffer(c, matcher.getMatchBytes(), 16 * matcher.getMatchBytes());
+      final int matcherBlockSize = matcher.getMatcherBlockSize();
+      final ReadableByteChannel c = zeroPad(channel, matcherBlockSize, controlFile.getHeader());
+      final RollingBuffer buffer = new RollingBuffer(c, matcherBlockSize, 16 * matcherBlockSize);
       int bytes;
       do {
         bytes = matcher.match(targetFile, buffer);
@@ -413,16 +416,25 @@ public class Zsync {
   }
 
   /**
-   * Pads the given channel with zeros if the length of the input file is not evenly divisible by the block size. The is
-   * necessary to match how the checksums in the zsync file are computed.
+   * Pads the given channel with zeros if the length of the input file is not evenly divisible by
+   * the block size. The is necessary to match how the checksums in the zsync file are computed.
    *
    * @param channel channel for input file to pad
    * @param header header of the zsync file being processed.
    * @return
+   * @throws IOException
    */
-  static ReadableByteChannel zeroPad(ReadableByteChannel channel, Header header) {
-    final int r = (int) (header.getLength() % header.getBlocksize());
-    return r == 0 ? channel : new ZeroPaddedReadableByteChannel(channel, header.getBlocksize() - r);
+  static ReadableByteChannel zeroPad(FileChannel channel, int matcherBlockSize, Header header) throws IOException {
+    final long fileSize = channel.size();
+    final int numZeros;
+    if (fileSize < matcherBlockSize) {
+      numZeros = matcherBlockSize - (int) fileSize;
+    } else {
+      final int blockSize = header.getBlocksize();
+      final int lastBlockSize = (int) (fileSize % blockSize);
+      numZeros = lastBlockSize == 0 ? 0 : blockSize - lastBlockSize;
+    }
+    return numZeros == 0 ? channel : new ZeroPaddedReadableByteChannel(channel, numZeros);
   }
 
   // this is just a temporary hacked up CLI for testing purposes
@@ -457,18 +469,19 @@ public class Zsync {
 
     final Zsync zsync = new Zsync(new OkHttpClient());
     /*
-     * final OutputFileListener l = new OutputFileListener() { final AtomicLong total = new AtomicLong(); final
-     * AtomicLong dl = new AtomicLong();
-     *
-     * @Override public void transferStarted(OutputFileEvent event) { this.total.set(event.getRemoteFileSizeInBytes());
-     * }
-     *
-     * @Override public void bytesDownloaded(OutputFileEvent event) { this.dl.addAndGet(event.getBytesDownloaded()); }
-     *
+     * final OutputFileListener l = new OutputFileListener() { final AtomicLong total = new
+     * AtomicLong(); final AtomicLong dl = new AtomicLong();
+     * 
+     * @Override public void transferStarted(OutputFileEvent event) {
+     * this.total.set(event.getRemoteFileSizeInBytes()); }
+     * 
+     * @Override public void bytesDownloaded(OutputFileEvent event) {
+     * this.dl.addAndGet(event.getBytesDownloaded()); }
+     * 
      * @Override public void bytesWritten(OutputFileEvent event) {}
-     *
-     * @Override public void transferEnded(OutputFileEvent event) { System.out.println("Downloaded " + (this.dl.get() /
-     * 1024 / 1024) + "MB of " + (this.total.get() / 1024 / 1024) + " MB"); } };
+     * 
+     * @Override public void transferEnded(OutputFileEvent event) { System.out.println("Downloaded "
+     * + (this.dl.get() / 1024 / 1024) + "MB of " + (this.total.get() / 1024 / 1024) + " MB"); } };
      */
 
     zsync.zsync(uri, options);

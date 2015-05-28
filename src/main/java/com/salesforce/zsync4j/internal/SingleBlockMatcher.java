@@ -35,7 +35,7 @@ public class SingleBlockMatcher extends BlockMatcher {
   }
 
   @Override
-  public int getMatchBytes() {
+  public int getMatcherBlockSize() {
     return this.blockSize;
   }
 

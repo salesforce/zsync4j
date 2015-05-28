@@ -60,7 +60,7 @@ public class DoubleBlockMatcher extends BlockMatcher {
   }
 
   @Override
-  public int getMatchBytes() {
+  public int getMatcherBlockSize() {
     return 2 * this.blockSize;
   }
 

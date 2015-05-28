@@ -9,7 +9,7 @@ public abstract class BlockMatcher {
         controlFile);
   }
 
-  public abstract int getMatchBytes();
+  public abstract int getMatcherBlockSize();
 
   public abstract int match(OutputFile targetFile, ReadableByteBuffer data);
 
