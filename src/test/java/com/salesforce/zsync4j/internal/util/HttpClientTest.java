@@ -1,18 +1,29 @@
 package com.salesforce.zsync4j.internal.util;
 
+import static com.squareup.okhttp.Protocol.HTTP_1_1;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
+import okio.BufferedSource;
+
 import org.junit.Test;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Closed;
+import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Completed;
+import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Event;
+import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Progressed;
+import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Started;
 import com.salesforce.zsync4j.internal.util.HttpClient.PartialResponseBodyTransferListener;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
 import com.squareup.okhttp.Call;
@@ -96,20 +107,38 @@ public class HttpClientTest {
   }
 
   @Test
-  public void testGetWithProgress() throws IOException {
-    Request request = new Request.Builder().url("http://url").build();
+  public void testTransferListener() throws IOException {
+    final URI uri = URI.create("tmp");
+
+    final byte[] data = new byte[17];
     final ResponseBody body = mock(ResponseBody.class);
-    when(body.contentLength()).thenReturn(1024l);
-    final Response response =
-        new Response.Builder().body(body).protocol(Protocol.HTTP_2).request(request).code(200).build();
+    when(body.contentLength()).thenReturn((long) data.length);
+    when(body.source()).thenReturn(mock(BufferedSource.class));
+    final InputStream inputStream = new ByteArrayInputStream(data);
+    when(body.byteStream()).thenReturn(inputStream);
+
+    final Request request = new Request.Builder().url(uri.toString()).build();
+    final Response response = new Response.Builder().protocol(HTTP_1_1).body(body).request(request).code(200).build();
 
     final OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     final Call mockCall = mock(Call.class);
     when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
     when(mockCall.execute()).thenReturn(response);
 
-  }
+    final EventLogTransferListener listener = new EventLogTransferListener();
+    final InputStream in = new HttpClient(mockHttpClient).get(uri, listener);
+    final byte[] b = new byte[8];
+    assertEquals(0, in.read());
+    assertEquals(8, in.read(b));
+    assertEquals(8, in.read(b, 0, 8));
+    assertEquals(-1, in.read());
+    in.close();
 
+    final List<Event> events =
+        ImmutableList.of(new Started(uri.toString(), data.length), new Progressed(1), new Progressed(8),
+            new Progressed(8), Completed.INSTANCE, Closed.INSTANCE);
+    assertEquals(events, listener.getEventLog());
+  }
 
   private List<Range> createSomeRanges(int numberOfRangesToCreate) {
     List<Range> ranges = new ArrayList<>(numberOfRangesToCreate);

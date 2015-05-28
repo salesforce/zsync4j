@@ -90,7 +90,6 @@ public class HttpClient {
 
     void rangeRequestComplete(Iterable<? extends Range> ranges);
 
-    // TODO should these really be here?
     void rangeProcessingStarted(Range range);
 
     void rangeProcessingComplete(Range range);
