@@ -154,7 +154,7 @@ public class HttpClient {
     }
   }
 
-  private static final int MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST = 50;
+  private static final int MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST = 100;
 
   private final OkHttpClient okHttpClient;
 
