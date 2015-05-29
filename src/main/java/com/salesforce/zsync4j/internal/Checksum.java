@@ -28,15 +28,15 @@ class Checksum {
   }
 
   byte[] getBytes() {
-    return bytes;
+    return this.bytes;
   }
 
   int getLength() {
-    return length;
+    return this.length;
   }
 
   boolean isSet() {
-    return set;
+    return this.set;
   }
 
   void unset() {
@@ -44,23 +44,23 @@ class Checksum {
   }
 
   void setChecksum(Checksum other) {
-    System.arraycopy(other.bytes, 0, bytes, 0, length);
-    set = true;
+    System.arraycopy(other.bytes, 0, this.bytes, 0, this.length);
+    this.set = true;
   }
 
   void setChecksum(ReadableByteBuffer block) {
-    setChecksum(block, 0, block.length() - 1);
+    setChecksum(block, 0, block.length());
   }
 
   void setChecksum(ReadableByteBuffer buffer, int offset, int length) {
-    digest.reset();
+    this.digest.reset();
     try {
-      buffer.write(digest, offset, length);
-      digest.digest(bytes, 0, bytes.length);
+      buffer.write(this.digest, offset, length);
+      this.digest.digest(this.bytes, 0, this.bytes.length);
     } catch (IOException | DigestException e) {
       throw new RuntimeException("Unexpected error during digest computation", e);
     }
-    set = true;
+    this.set = true;
   }
 
 }
