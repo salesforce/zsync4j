@@ -20,6 +20,7 @@ import java.util.Map;
 import com.salesforce.zsync4j.Zsync.Options.Credentials;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ControlFile;
+import com.salesforce.zsync4j.internal.EventDispatcher;
 import com.salesforce.zsync4j.internal.EventDispatcherImpl;
 import com.salesforce.zsync4j.internal.Header;
 import com.salesforce.zsync4j.internal.OutputFile;
@@ -231,7 +232,6 @@ public class Zsync {
   public static final String VERSION = "0.6.2";
 
   private final OkHttpClient okHttpClient;
-  private final EventDispatcherImpl events;
 
   public Zsync() {
     this(new OkHttpClient());
@@ -239,29 +239,29 @@ public class Zsync {
 
   public Zsync(OkHttpClient okHttpClient) {
     this.okHttpClient = okHttpClient;
-    this.events = new EventDispatcherImpl();
   }
 
   public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException, OutputFileValidationException {
+    EventDispatcherImpl events = new EventDispatcherImpl();
     try {
       options = new Options(options); // Copy, since the supplied Options is mutable
-      this.events.setOutputFileObserver(options.getOutputFileObserver());
-      this.events.zsyncStarted(zsyncFile, options);
-      this.zsyncInternal(zsyncFile, options);
-      this.events.zsyncComplete();
+      events.setOutputFileObserver(options.getOutputFileObserver());
+      events.zsyncStarted(zsyncFile, options);
+      this.zsyncInternal(zsyncFile, options, events);
+      events.zsyncComplete();
     } catch (ZsyncFileNotFoundException exception) {
-      this.failAndRethrow(exception);
+      this.failAndRethrow(exception, events);
     } catch (OutputFileValidationException exception) {
-      this.failAndRethrow(exception);
+      this.failAndRethrow(exception, events);
     } catch (RuntimeException exception) {
-      this.failAndRethrow(exception);
+      this.failAndRethrow(exception, events);
     } finally {
-      this.events.setOutputFileObserver(null);
+      events.setOutputFileObserver(null);
     }
   }
 
-  private <T extends Exception> void failAndRethrow(T exception) throws T {
-    this.events.zsyncFailed(exception);
+  private <T extends Exception> void failAndRethrow(T exception, EventDispatcher events) throws T {
+    events.zsyncFailed(exception);
     throw exception;
   }
 
@@ -275,28 +275,28 @@ public class Zsync {
    * @throws ZsyncFileNotFoundException
    * @throws OutputFileValidationException
    */
-  private void zsyncInternal(URI zsyncFile, Options options) throws ZsyncFileNotFoundException,
+  private void zsyncInternal(URI zsyncFile, Options options, EventDispatcher events) throws ZsyncFileNotFoundException,
       OutputFileValidationException {
 
     final HttpClient httpClient = this.createHttpClient(options.getCredentials());
 
     final ControlFile controlFile;
-    this.events.controlFileProcessingStarted(zsyncFile);
-    try (InputStream in = this.openZsyncFile(zsyncFile, httpClient, options)) {
+    events.controlFileProcessingStarted(zsyncFile);
+    try (InputStream in = this.openZsyncFile(zsyncFile, httpClient, options, events)) {
       controlFile = ControlFile.read(in);
     } catch (FileNotFoundException e) {
       throw new ZsyncFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
     } catch (IOException e) {
       throw new RuntimeException("Failed to read zsync control file", e);
     }
-    this.events.controlFileProcessingComplete(controlFile);
+    events.controlFileProcessingComplete(controlFile);
 
     // determine output file location
     Path outputFile = options.getOutputFile();
     if (outputFile == null) {
       outputFile = Paths.get(controlFile.getHeader().getFilename());
     }
-    this.events.outputFileResolved(outputFile);
+    events.outputFileResolved(outputFile);
 
     // determine remote file location
     URI remoteFileUri = URI.create(controlFile.getHeader().getUrl());
@@ -304,10 +304,10 @@ public class Zsync {
       remoteFileUri = options.getZsyncFileSource().resolve(remoteFileUri);
     }
 
-    try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, this.events)) {
-      boolean outputFileComplete = this.processInputFiles(targetFile, controlFile, options.getInputFiles());
+    try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, events)) {
+      boolean outputFileComplete = this.processInputFiles(targetFile, controlFile, options.getInputFiles(), events);
       if (!outputFileComplete) {
-        httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(), targetFile, this.events);
+        httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(), targetFile, events);
       }
     } catch (IOException exception) {
       throw new RuntimeException(exception);
@@ -332,7 +332,8 @@ public class Zsync {
    * @return
    * @throws IOException
    */
-  private InputStream openZsyncFile(URI zsyncFile, HttpClient httpClient, Options options) throws IOException {
+  private InputStream openZsyncFile(URI zsyncFile, HttpClient httpClient, Options options, EventDispatcher events)
+      throws IOException {
     final InputStream in;
     if (zsyncFile.isAbsolute()) {
       // check if it's a local URI
@@ -343,9 +344,9 @@ public class Zsync {
         // check if we should persist the file locally
         final Path savePath = options.getSaveZsyncFile();
         if (savePath == null) {
-          return httpClient.get(zsyncFile, this.events);
+          return httpClient.get(zsyncFile, events);
         } else {
-          httpClient.get(zsyncFile, savePath, this.events);
+          httpClient.get(zsyncFile, savePath, events);
           return Files.newInputStream(savePath);
         }
       } else {
@@ -389,18 +390,19 @@ public class Zsync {
     return new HttpClient(clone);
   }
 
-  private boolean processInputFiles(OutputFile targetFile, ControlFile controlFile, Iterable<? extends Path> inputFiles)
-      throws IOException {
+  private boolean processInputFiles(OutputFile targetFile, ControlFile controlFile,
+      Iterable<? extends Path> inputFiles, EventDispatcher events) throws IOException {
     for (Path inputFile : inputFiles) {
-      if (this.processInputFile(targetFile, controlFile, inputFile)) {
+      if (this.processInputFile(targetFile, controlFile, inputFile, events)) {
         return true;
       }
     }
     return false;
   }
 
-  private boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile) throws IOException {
-    this.events.inputFileProcessingStarted(inputFile);
+  private boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile,
+      EventDispatcher events) throws IOException {
+    events.inputFileProcessingStarted(inputFile);
     try (final FileChannel channel = FileChannel.open(inputFile)) {
       final BlockMatcher matcher = BlockMatcher.create(controlFile);
       final int matcherBlockSize = matcher.getMatcherBlockSize();
@@ -411,7 +413,7 @@ public class Zsync {
         bytes = matcher.match(targetFile, buffer);
       } while (buffer.advance(bytes));
     }
-    this.events.inputFileProcessingComplete(inputFile);
+    events.inputFileProcessingComplete(inputFile);
     return targetFile.isComplete();
   }
 
@@ -471,15 +473,15 @@ public class Zsync {
     /*
      * final OutputFileListener l = new OutputFileListener() { final AtomicLong total = new
      * AtomicLong(); final AtomicLong dl = new AtomicLong();
-     * 
+     *
      * @Override public void transferStarted(OutputFileEvent event) {
      * this.total.set(event.getRemoteFileSizeInBytes()); }
-     * 
+     *
      * @Override public void bytesDownloaded(OutputFileEvent event) {
      * this.dl.addAndGet(event.getBytesDownloaded()); }
-     * 
+     *
      * @Override public void bytesWritten(OutputFileEvent event) {}
-     * 
+     *
      * @Override public void transferEnded(OutputFileEvent event) { System.out.println("Downloaded "
      * + (this.dl.get() / 1024 / 1024) + "MB of " + (this.total.get() / 1024 / 1024) + " MB"); } };
      */
