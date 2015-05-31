@@ -7,15 +7,13 @@ import java.net.URI;
 import java.nio.file.Path;
 
 import com.salesforce.zsync4j.Zsync.Options;
-import com.salesforce.zsync4j.internal.util.HttpClient.PartialResponseBodyTransferListener;
 
 /**
- * Maintains state relevant for events, and constructs and throws externally published events as
- * necessary.
+ * Observes events over the course of a single zsync invocation.
  *
  * @author bstclair
  */
-public interface EventDispatcher extends PartialResponseBodyTransferListener {
+public interface ZsyncObserver {
 
   void outputFileResolved(Path outputFile);
 
@@ -32,6 +30,8 @@ public interface EventDispatcher extends PartialResponseBodyTransferListener {
   void remoteFileProcessingStarted(URI remoteUri, long expectedBytes, long expectedBlocks, long expectedRequests);
 
   void remoteFileProcessingComplete();
+
+  void bytesDownloaded(long bytes);
 
   void bytesWritten(Path file, long bytes);
 

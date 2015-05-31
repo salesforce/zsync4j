@@ -19,12 +19,18 @@ import java.util.Map;
 
 import com.salesforce.zsync4j.Zsync.Options.Credentials;
 import com.salesforce.zsync4j.internal.BlockMatcher;
+import com.salesforce.zsync4j.internal.ChecksumValidationIOException;
 import com.salesforce.zsync4j.internal.ControlFile;
-import com.salesforce.zsync4j.internal.EventDispatcher;
-import com.salesforce.zsync4j.internal.EventDispatcherImpl;
 import com.salesforce.zsync4j.internal.Header;
+import com.salesforce.zsync4j.internal.HttpTransferObserverToZsyncObserverAdapter;
 import com.salesforce.zsync4j.internal.OutputFile;
+import com.salesforce.zsync4j.internal.OutputFileObserverToZsyncObserverAdapter;
+import com.salesforce.zsync4j.internal.RepeatingZsyncObserver;
+import com.salesforce.zsync4j.internal.ResultsBuilder;
+import com.salesforce.zsync4j.internal.ZsyncObserver;
+import com.salesforce.zsync4j.internal.ZsyncObserverToPartialResponseBodyTransferListenerAdapter;
 import com.salesforce.zsync4j.internal.util.HttpClient;
+import com.salesforce.zsync4j.internal.util.HttpClient.ResponseBodyTransferListener;
 import com.salesforce.zsync4j.internal.util.RollingBuffer;
 import com.salesforce.zsync4j.internal.util.ZeroPaddedReadableByteChannel;
 import com.salesforce.zsync4j.internal.util.ZsyncUtil;
@@ -34,8 +40,8 @@ import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 
 /**
- * Zsync download client: reduces the number of bytes retrieved from a remote server by drawing
- * unchanged parts of the file from a set of local input files.
+ * Zsync download client: reduces the number of bytes retrieved from a remote server by drawing unchanged parts of the
+ * file from a set of local input files.
  *
  * @see <a href="http://zsync.moria.org.uk/">http://zsync.moria.org.uk/</a>
  *
@@ -93,6 +99,7 @@ public class Zsync {
     private URI zsyncUri;
     private Map<String, Credentials> credentials = new HashMap<>(2);
     private OutputFileObserver outputFileObserver;
+    private HttpTransferObserver httpTransferObserver;
 
     public Options() {
       super();
@@ -106,12 +113,13 @@ public class Zsync {
         this.zsyncUri = other.zsyncUri;
         this.credentials.putAll(other.credentials);
         this.outputFileObserver = other.outputFileObserver;
+        this.httpTransferObserver = other.httpTransferObserver;
       }
     }
 
     /**
-     * Adds an input file from which matching blocks are transferred to the output file to reduce
-     * the ranges that have to be fetched from the remote source.
+     * Adds an input file from which matching blocks are transferred to the output file to reduce the ranges that have
+     * to be fetched from the remote source.
      *
      * @param inputFile
      * @return
@@ -122,8 +130,8 @@ public class Zsync {
     }
 
     /**
-     * Input files to construct output file from. May be empty in which case the full content is
-     * retrieved from the remote location.
+     * Input files to construct output file from. May be empty in which case the full content is retrieved from the
+     * remote location.
      *
      * @return
      */
@@ -151,10 +159,18 @@ public class Zsync {
       return this.outputFileObserver;
     }
 
+    public Options setHttpTransferObserver(HttpTransferObserver httpTransferObserver) {
+      this.httpTransferObserver = httpTransferObserver;
+      return this;
+    }
+
+    public HttpTransferObserver getHttpTransferObserver() {
+      return this.httpTransferObserver;
+    }
+
     /**
-     * Location at which to store the output file. If not set, output will be stored in the current
-     * working directory using the <code>Filename</code> header from the control file as the
-     * relative path.
+     * Location at which to store the output file. If not set, output will be stored in the current working directory
+     * using the <code>Filename</code> header from the control file as the relative path.
      *
      * @return
      */
@@ -163,9 +179,9 @@ public class Zsync {
     }
 
     /**
-     * Corresponds to the zsync -k parameter: the location at which to store the zsync control file.
-     * This option only takes effect if the zsync URI passed as the first argument to
-     * {@link Zsync#zsync(URI, Options)} is a remote (http) URL.
+     * Corresponds to the zsync -k parameter: the location at which to store the zsync control file. This option only
+     * takes effect if the zsync URI passed as the first argument to {@link Zsync#zsync(URI, Options)} is a remote
+     * (http) URL.
      *
      * @param saveZsyncFile
      * @return
@@ -185,9 +201,8 @@ public class Zsync {
     }
 
     /**
-     * Corresponds to the zsync -u parameter: the source URI from which the zsync file was
-     * originally retrieved. Takes affect only if the first parameter to the
-     * {@link Zsync#zsync(URI, Options)} method refers to a local file.
+     * Corresponds to the zsync -u parameter: the source URI from which the zsync file was originally retrieved. Takes
+     * affect only if the first parameter to the {@link Zsync#zsync(URI, Options)} method refers to a local file.
      *
      * @param zsyncUri
      * @return
@@ -241,42 +256,47 @@ public class Zsync {
     this.okHttpClient = okHttpClient;
   }
 
-  public void zsync(URI zsyncFile, Options options) throws ZsyncFileNotFoundException, OutputFileValidationException {
-    EventDispatcherImpl events = new EventDispatcherImpl();
+  public ZsyncResults zsync(URI zsyncFile, Options options) throws ZsyncException {
+    ResultsBuilder resultsBuilder = new ResultsBuilder(options);
+    RepeatingZsyncObserver events = new RepeatingZsyncObserver();
+    events.addObserver(resultsBuilder);
+    if (options.getOutputFileObserver() != null) {
+      events.addObserver(new OutputFileObserverToZsyncObserverAdapter(options.getOutputFileObserver()));
+    }
+    if (options.getHttpTransferObserver() != null) {
+      events.addObserver(new HttpTransferObserverToZsyncObserverAdapter(options.getHttpTransferObserver()));
+    }
     try {
       options = new Options(options); // Copy, since the supplied Options is mutable
-      events.setOutputFileObserver(options.getOutputFileObserver());
       events.zsyncStarted(zsyncFile, options);
       this.zsyncInternal(zsyncFile, options, events);
       events.zsyncComplete();
-    } catch (ZsyncFileNotFoundException exception) {
-      this.failAndRethrow(exception, events);
-    } catch (OutputFileValidationException exception) {
-      this.failAndRethrow(exception, events);
+      return resultsBuilder.build();
+    } catch (ZsyncException exception) {
+      throw this.failAndRethrow(exception, events);
     } catch (RuntimeException exception) {
-      this.failAndRethrow(exception, events);
-    } finally {
-      events.setOutputFileObserver(null);
+      throw this.failAndRethrow(exception, events);
+    } catch (IOException exception) {
+      throw this.failAndRethrow(new ZsyncException(exception), events);
     }
   }
 
-  private <T extends Exception> void failAndRethrow(T exception, EventDispatcher events) throws T {
+  private <T extends Exception> T failAndRethrow(T exception, ZsyncObserver events) throws T {
     events.zsyncFailed(exception);
     throw exception;
   }
 
   /**
-   * Retrieves the remote file pointed to by the given zsync control file. The supplied listener is
-   * called back to as data is downloaded and the output file is written.
+   * Retrieves the remote file pointed to by the given zsync control file. The supplied listener is called back to as
+   * data is downloaded and the output file is written.
    *
    * @param zsyncFile
    * @param options
    * @param outputFileListener
-   * @throws ZsyncFileNotFoundException
-   * @throws OutputFileValidationException
+   * @throws ZsyncControlFileNotFoundException
+   * @throws ZsyncFinalChecksumValidationFailedException
    */
-  private void zsyncInternal(URI zsyncFile, Options options, EventDispatcher events) throws ZsyncFileNotFoundException,
-      OutputFileValidationException {
+  private void zsyncInternal(URI zsyncFile, Options options, ZsyncObserver events) throws ZsyncException, IOException {
 
     final HttpClient httpClient = this.createHttpClient(options.getCredentials());
 
@@ -285,7 +305,7 @@ public class Zsync {
     try (InputStream in = this.openZsyncFile(zsyncFile, httpClient, options, events)) {
       controlFile = ControlFile.read(in);
     } catch (FileNotFoundException e) {
-      throw new ZsyncFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
+      throw new ZsyncControlFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
     } catch (IOException e) {
       throw new RuntimeException("Failed to read zsync control file", e);
     }
@@ -307,23 +327,26 @@ public class Zsync {
     try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, events)) {
       boolean outputFileComplete = this.processInputFiles(targetFile, controlFile, options.getInputFiles(), events);
       if (!outputFileComplete) {
-        httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(), targetFile, events);
+        httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(), targetFile,
+            new ZsyncObserverToPartialResponseBodyTransferListenerAdapter(events));
+        outputFileComplete = targetFile.isComplete();
       }
-    } catch (IOException exception) {
-      throw new RuntimeException(exception);
+      if (!outputFileComplete) {
+        throw new InternalZsyncException("Output file does not appear to be complete, but it should be");
+      }
+    } catch (ChecksumValidationIOException exception) {
+      throw new ZsyncFinalChecksumValidationFailedException("Calculated checksum does not match expected checksum");
     }
   }
 
   /**
-   * Opens the zsync file referred to by the given URI for read. If the file refers to a local file
-   * system path, the local file is opened directly. Otherwise, if the file is remote and
-   * {@link Options#getSaveZsyncFile()} is specified, the remote file is stored locally in the given
-   * location first and then opened for read locally. If the file is remote and no save location is
-   * specified, the file is opened for read over the remote connection.
+   * Opens the zsync file referred to by the given URI for read. If the file refers to a local file system path, the
+   * local file is opened directly. Otherwise, if the file is remote and {@link Options#getSaveZsyncFile()} is
+   * specified, the remote file is stored locally in the given location first and then opened for read locally. If the
+   * file is remote and no save location is specified, the file is opened for read over the remote connection.
    * <p>
-   * If the file is remote, the method always calls {@link Options#setZsyncFileSource(URI)} on the
-   * passed in options parameter, so that relative file URLs in the control file can later be
-   * resolved against it.
+   * If the file is remote, the method always calls {@link Options#setZsyncFileSource(URI)} on the passed in options
+   * parameter, so that relative file URLs in the control file can later be resolved against it.
    *
    * @param zsyncFile
    * @param httpClient
@@ -332,7 +355,7 @@ public class Zsync {
    * @return
    * @throws IOException
    */
-  private InputStream openZsyncFile(URI zsyncFile, HttpClient httpClient, Options options, EventDispatcher events)
+  private InputStream openZsyncFile(URI zsyncFile, HttpClient httpClient, Options options, ZsyncObserver events)
       throws IOException {
     final InputStream in;
     if (zsyncFile.isAbsolute()) {
@@ -343,10 +366,12 @@ public class Zsync {
         options.setZsyncFileSource(zsyncFile);
         // check if we should persist the file locally
         final Path savePath = options.getSaveZsyncFile();
+        ResponseBodyTransferListener httpListener =
+            new ZsyncObserverToPartialResponseBodyTransferListenerAdapter(events);
         if (savePath == null) {
-          return httpClient.get(zsyncFile, events);
+          return httpClient.get(zsyncFile, httpListener);
         } else {
-          httpClient.get(zsyncFile, savePath, events);
+          httpClient.get(zsyncFile, savePath, httpListener);
           return Files.newInputStream(savePath);
         }
       } else {
@@ -363,10 +388,9 @@ public class Zsync {
   }
 
   /**
-   * Creates an HTTP client configured with the given credentials map. Uses a shallow copy of the
-   * OkHttpClient to not modify the original copy per <a
-   * href="https://github.com/square/okhttp/wiki/Recipes#per-call-configuration">Per-call
-   * Configuration</a>
+   * Creates an HTTP client configured with the given credentials map. Uses a shallow copy of the OkHttpClient to not
+   * modify the original copy per <a
+   * href="https://github.com/square/okhttp/wiki/Recipes#per-call-configuration">Per-call Configuration</a>
    *
    * @param credentials
    * @return
@@ -391,7 +415,7 @@ public class Zsync {
   }
 
   private boolean processInputFiles(OutputFile targetFile, ControlFile controlFile,
-      Iterable<? extends Path> inputFiles, EventDispatcher events) throws IOException {
+      Iterable<? extends Path> inputFiles, ZsyncObserver events) throws IOException {
     for (Path inputFile : inputFiles) {
       if (this.processInputFile(targetFile, controlFile, inputFile, events)) {
         return true;
@@ -400,8 +424,8 @@ public class Zsync {
     return false;
   }
 
-  private boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile,
-      EventDispatcher events) throws IOException {
+  private boolean processInputFile(OutputFile targetFile, ControlFile controlFile, Path inputFile, ZsyncObserver events)
+      throws IOException {
     events.inputFileProcessingStarted(inputFile);
     try (final FileChannel channel = FileChannel.open(inputFile)) {
       final BlockMatcher matcher = BlockMatcher.create(controlFile);
@@ -418,8 +442,8 @@ public class Zsync {
   }
 
   /**
-   * Pads the given channel with zeros if the length of the input file is not evenly divisible by
-   * the block size. The is necessary to match how the checksums in the zsync file are computed.
+   * Pads the given channel with zeros if the length of the input file is not evenly divisible by the block size. The is
+   * necessary to match how the checksums in the zsync file are computed.
    *
    * @param channel channel for input file to pad
    * @param header header of the zsync file being processed.
@@ -440,7 +464,7 @@ public class Zsync {
   }
 
   // this is just a temporary hacked up CLI for testing purposes
-  public static void main(String[] args) throws IOException, ZsyncFileNotFoundException {
+  public static void main(String[] args) throws IOException, ZsyncException {
     if (args.length == 0) {
       throw new IllegalArgumentException("Must specify at least zsync file url");
     }
@@ -471,19 +495,18 @@ public class Zsync {
 
     final Zsync zsync = new Zsync(new OkHttpClient());
     /*
-     * final OutputFileListener l = new OutputFileListener() { final AtomicLong total = new
-     * AtomicLong(); final AtomicLong dl = new AtomicLong();
-     *
-     * @Override public void transferStarted(OutputFileEvent event) {
-     * this.total.set(event.getRemoteFileSizeInBytes()); }
-     *
-     * @Override public void bytesDownloaded(OutputFileEvent event) {
-     * this.dl.addAndGet(event.getBytesDownloaded()); }
-     *
+     * final OutputFileListener l = new OutputFileListener() { final AtomicLong total = new AtomicLong(); final
+     * AtomicLong dl = new AtomicLong();
+     * 
+     * @Override public void transferStarted(OutputFileEvent event) { this.total.set(event.getRemoteFileSizeInBytes());
+     * }
+     * 
+     * @Override public void bytesDownloaded(OutputFileEvent event) { this.dl.addAndGet(event.getBytesDownloaded()); }
+     * 
      * @Override public void bytesWritten(OutputFileEvent event) {}
-     *
-     * @Override public void transferEnded(OutputFileEvent event) { System.out.println("Downloaded "
-     * + (this.dl.get() / 1024 / 1024) + "MB of " + (this.total.get() / 1024 / 1024) + " MB"); } };
+     * 
+     * @Override public void transferEnded(OutputFileEvent event) { System.out.println("Downloaded " + (this.dl.get() /
+     * 1024 / 1024) + "MB of " + (this.total.get() / 1024 / 1024) + " MB"); } };
      */
 
     zsync.zsync(uri, options);

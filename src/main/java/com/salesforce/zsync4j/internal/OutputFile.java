@@ -21,7 +21,6 @@ import java.util.List;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
-import com.salesforce.zsync4j.OutputFileValidationException;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
 import com.salesforce.zsync4j.internal.util.Range;
 import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
@@ -44,9 +43,9 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final FileChannel channel;
   private final boolean[] completed;
   private int blocksRemaining;
-  private EventDispatcher events;
+  private ZsyncObserver events;
 
-  public OutputFile(Path path, ControlFile controlFile, EventDispatcher events) throws IOException {
+  public OutputFile(Path path, ControlFile controlFile, ZsyncObserver events) throws IOException {
     this.path = path;
     this.events = events;
     final String tmpName = path.getFileName().toString() + ".part";
@@ -173,21 +172,21 @@ public class OutputFile implements RangeReceiver, Closeable {
   public void close() throws IOException {
     try {
       if (!this.isComplete()) {
-        throw new OutputFileValidationException("Target incomplete: missing ranges: " + this.getMissingRanges());
+        throw new MissingRangesIOException("Target incomplete: missing ranges: " + this.getMissingRanges());
       }
       this.channel.position(0); // reset channel to beginning to compute full SHA1
       this.events.sha1CalculationStarted(this.tempPath);
       String calculatedSha1 = ZsyncUtil.computeSha1(this.channel);
       this.events.sha1CalculationComplete(calculatedSha1);
       if (!this.sha1.equals(calculatedSha1)) {
-        throw new OutputFileValidationException("Target file sha1 does not match expected");
+        throw new ChecksumValidationIOException(this.sha1, calculatedSha1);
       }
+      this.events.moveTempFileStarted(this.tempPath, this.path);
+      Files.move(this.tempPath, this.path, REPLACE_EXISTING, REPLACE_EXISTING);
+      Files.setLastModifiedTime(this.path, fromMillis(this.mtime));
+      this.events.moveTempFileComplete();
     } finally {
       this.channel.close();
     }
-    this.events.moveTempFileStarted(this.tempPath, this.path);
-    Files.move(this.tempPath, this.path, REPLACE_EXISTING, REPLACE_EXISTING);
-    Files.setLastModifiedTime(this.path, fromMillis(this.mtime));
-    this.events.moveTempFileComplete();
   }
 }
