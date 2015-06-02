@@ -6,8 +6,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
 /**
- * Maintains a window view onto the underlying channel. The buffer has only two states: full or
- * empty.
+ * Efficient rolling window over a byte channel.
  * 
  * @author bbusjaeger
  *
@@ -21,9 +20,26 @@ public class RollingBuffer implements ReadableByteBuffer {
   // length of window
   private final int length;
 
+  /**
+   * Constructs a rolling buffer over the given channel. The constructor initializes the buffer by
+   * reading at least a full window size from the channel. If the channel does not contain
+   * sufficient data to fill a window, an IllegalArgumentException is thrown.
+   *
+   * @param channel Channel to roll over
+   * @param windowSize Size of the window into the channel, must be positive.
+   * @param bufferSize Size of the buffer underlying the window, i.e. how many bytes to hold in
+   *        memory at any given time. Must be greater than equal to twice the window size.
+   * @throws IOException If reading the channel fails
+   */
   public RollingBuffer(ReadableByteChannel channel, int windowSize, int bufferSize) throws IOException {
-    if (bufferSize < windowSize) {
+    if (windowSize <= 0 || bufferSize <= 0) {
+      throw new IllegalArgumentException("window and buffer size must be positive integers");
+    }
+    if (bufferSize < 2 * windowSize) {
       throw new IllegalArgumentException("Buffer size must be at least as large as window size");
+    }
+    if (channel == null) {
+      throw new IllegalArgumentException("channel must not be null");
     }
     this.channel = channel;
     this.length = windowSize;
@@ -36,12 +52,13 @@ public class RollingBuffer implements ReadableByteBuffer {
   }
 
   /**
-   * Advances the buffer to the next available window in the underlying channel. If the current
-   * window is empty, a full window will be read from the channel. Otherwise, the window starting at
-   * the next byte is read.
+   * Advances the window by the given number of bytes.
    *
-   * @return true if sufficient bits were available in the underlying channel to advance the window,
-   *         false otherwise
+   * @param bytes Number of bytes to advance the window by. Must the in the interval [0,
+   *        windowSize].
+   * @return True if window was successfully advanced by the given number of bytes. False,
+   *         otherwise, i.e. if the channel does not contain enough bytes to advance the window by
+   *         the request number.
    * @throws IOException
    */
   public boolean advance(int bytes) throws IOException {
@@ -60,24 +77,36 @@ public class RollingBuffer implements ReadableByteBuffer {
     return true;
   }
 
+  /**
+   * Returns the length of the window
+   */
   @Override
   public int length() {
     return this.length;
   }
 
+  /**
+   * Returns the byte at the given index within the current window
+   */
   @Override
   public byte get(int i) {
-    if (i < 0 || i > this.length) {
+    if (i < 0 || i >= this.length) {
       throw new IndexOutOfBoundsException();
     }
     return this.buffer.get(this.buffer.position() + i);
   }
 
+  /**
+   * Writes the current window fully to the given channel
+   */
   @Override
   public void write(WritableByteChannel channel) throws IOException {
     write(channel, 0, this.length);
   }
 
+  /**
+   * Writes length bytes from the current window starting at the given offset into the channel
+   */
   @Override
   public void write(WritableByteChannel channel, int offset, int length) throws IOException {
     if (offset < 0 || offset >= this.length) {
@@ -104,6 +133,15 @@ public class RollingBuffer implements ReadableByteBuffer {
     }
   }
 
+  /**
+   * Ensures sufficient bytes are available in the buffer to satisfy the given request to advance by
+   * needed bytes.
+   *
+   * @param needed Number of bytes needed in the underlying buffer beyond the end of the current
+   *        window
+   * @return True if the needed number of bytes could be made available, false otherwise.
+   * @throws IOException
+   */
   boolean ensureBuffered(int needed) throws IOException {
     if (this.buffer.remaining() < this.length + needed) {
       // reached end of file last time: can't read more
@@ -121,6 +159,12 @@ public class RollingBuffer implements ReadableByteBuffer {
     return true;
   }
 
+  /**
+   * Fills the buffer until it is full or the channel is exhausted. Flips the buffer at the end to
+   * make it ready for read.
+   *
+   * @throws IOException
+   */
   void fill() throws IOException {
     do {
       if (this.channel.read(this.buffer) == -1) {
