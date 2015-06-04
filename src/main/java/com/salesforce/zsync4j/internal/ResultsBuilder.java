@@ -146,27 +146,6 @@ public class ResultsBuilder implements ZsyncObserver {
       }
     };
 
-    return new ZsyncResults() {
-
-      @Override
-      public Path getOutputFile() {
-        return outputFile;
-      }
-
-      @Override
-      public String getSha1() {
-        return sha1;
-      }
-
-      @Override
-      public ZsyncStats getStats() {
-        return stats;
-      }
-
-      @Override
-      public Path getDownloadedControlFile() {
-        return ResultsBuilder.this.options.getSaveZsyncFile();
-      }
-    };
+    return new ZsyncResults(outputFile, sha1, stats);
   }
 }
