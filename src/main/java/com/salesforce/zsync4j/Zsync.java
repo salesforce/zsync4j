@@ -294,7 +294,7 @@ public class Zsync {
    * @param options
    * @param outputFileListener
    * @throws ZsyncControlFileNotFoundException
-   * @throws ZsyncFinalChecksumValidationFailedException
+   * @throws ZsyncChecksumValidationFailedException
    */
   private void zsyncInternal(URI zsyncFile, Options options, ZsyncObserver events) throws ZsyncException, IOException {
 
@@ -335,7 +335,7 @@ public class Zsync {
         throw new InternalZsyncException("Output file does not appear to be complete, but it should be");
       }
     } catch (ChecksumValidationIOException exception) {
-      throw new ZsyncFinalChecksumValidationFailedException("Calculated checksum does not match expected checksum");
+      throw new ZsyncChecksumValidationFailedException("Calculated checksum does not match expected checksum");
     }
   }
 

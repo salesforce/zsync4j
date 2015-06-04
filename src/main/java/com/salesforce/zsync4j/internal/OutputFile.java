@@ -172,7 +172,8 @@ public class OutputFile implements RangeReceiver, Closeable {
   public void close() throws IOException {
     try {
       if (!this.isComplete()) {
-        throw new MissingRangesIOException("Target incomplete: missing ranges: " + this.getMissingRanges());
+        throw new RuntimeException("An internal zsync error occurred, target is missing the following ranges: "
+            + this.getMissingRanges());
       }
       this.channel.position(0); // reset channel to beginning to compute full SHA1
       this.events.sha1CalculationStarted(this.tempPath);

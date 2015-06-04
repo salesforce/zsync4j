@@ -7,15 +7,15 @@ package com.salesforce.zsync4j;
  * @author bbusjaeger
  *
  */
-public class ZsyncFinalChecksumValidationFailedException extends ZsyncException {
+public class ZsyncChecksumValidationFailedException extends ZsyncException {
 
   private static final long serialVersionUID = 6774699463758923383L;
 
-  public ZsyncFinalChecksumValidationFailedException(String message, Throwable cause) {
+  public ZsyncChecksumValidationFailedException(String message, Throwable cause) {
     super(message, cause);
   }
 
-  public ZsyncFinalChecksumValidationFailedException(String message) {
+  public ZsyncChecksumValidationFailedException(String message) {
     super(message);
   }
 
