@@ -12,9 +12,8 @@ import com.salesforce.zsync4j.Zsync.Options;
 import com.salesforce.zsync4j.ZsyncResults;
 import com.salesforce.zsync4j.ZsyncStats;
 
-public class ResultsBuilder implements ZsyncObserver {
+public class ResultsBuilder extends ZsyncObserver {
 
-  private final Options options;
   private final Map<Path, Long> contributedBytesByInputFile = new HashMap<>();;
 
   private long currentContextBytesDownloaded;
@@ -25,10 +24,6 @@ public class ResultsBuilder implements ZsyncObserver {
   private String sha1;
   private long bytesDownloadedForControlFile;
   private long bytesDownloadedFromRemoteTarget;
-
-  public ResultsBuilder(Options options) {
-    this.options = options;
-  }
 
   @Override
   public void outputFileResolved(Path outputFile) {
@@ -80,24 +75,9 @@ public class ResultsBuilder implements ZsyncObserver {
   }
 
   @Override
-  public void bytesWritten(Path file, long bytes) {}
-
-  @Override
-  public void sha1CalculationStarted(Path file) {}
-
-  @Override
-  public void sha1CalculationComplete(String sha1) {
+  public void sha1Calculated(String sha1) {
     this.sha1 = sha1;
   }
-
-  @Override
-  public void moveTempFileStarted(Path tempFile, Path targetFile) {}
-
-  @Override
-  public void moveTempFileComplete() {}
-
-  @Override
-  public void zsyncFailed(Exception exception) {}
 
   @Override
   public void zsyncComplete() {

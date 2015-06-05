@@ -13,37 +13,31 @@ import com.salesforce.zsync4j.Zsync.Options;
  *
  * @author bstclair
  */
-public interface ZsyncObserver {
+public class ZsyncObserver {
 
-  void outputFileResolved(Path outputFile);
+  public void outputFileResolved(Path outputFile) {}
 
-  void zsyncStarted(URI requestedZsyncUri, Options options);
+  public void zsyncStarted(URI requestedZsyncUri, Options options) {}
 
-  void controlFileProcessingStarted(URI controlFileUri);
+  public void controlFileProcessingStarted(URI controlFileUri) {}
 
-  void controlFileProcessingComplete(ControlFile controlFile);
+  public void controlFileProcessingComplete(ControlFile controlFile) {}
 
-  void inputFileProcessingStarted(Path inputFile);
+  public void inputFileProcessingStarted(Path inputFile) {}
 
-  void inputFileProcessingComplete(Path inputFile);
+  public void inputFileProcessingComplete(Path inputFile) {}
 
-  void remoteFileProcessingStarted(URI remoteUri, long expectedBytes, long expectedBlocks, long expectedRequests);
+  public void remoteFileProcessingStarted(URI remoteUri, long expectedBytes, long expectedBlocks, long expectedRequests) {}
 
-  void remoteFileProcessingComplete();
+  public void remoteFileProcessingComplete() {}
 
-  void bytesDownloaded(long bytes);
+  public void bytesDownloaded(long bytes) {}
 
-  void bytesWritten(Path file, long bytes);
+  public void bytesWritten(Path file, long bytes) {}
 
-  void sha1CalculationStarted(Path file);
+  public void sha1Calculated(String sha1) {}
 
-  void sha1CalculationComplete(String sha1);
+  public void zsyncFailed(Exception exception) {}
 
-  void moveTempFileStarted(Path tempFile, Path targetFile);
-
-  void moveTempFileComplete();
-
-  void zsyncFailed(Exception exception);
-
-  void zsyncComplete();
+  public void zsyncComplete() {}
 }

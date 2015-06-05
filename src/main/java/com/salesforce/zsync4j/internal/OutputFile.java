@@ -176,16 +176,13 @@ public class OutputFile implements RangeReceiver, Closeable {
             + this.getMissingRanges());
       }
       this.channel.position(0); // reset channel to beginning to compute full SHA1
-      this.events.sha1CalculationStarted(this.tempPath);
       String calculatedSha1 = ZsyncUtil.computeSha1(this.channel);
-      this.events.sha1CalculationComplete(calculatedSha1);
+      this.events.sha1Calculated(calculatedSha1);
       if (!this.sha1.equals(calculatedSha1)) {
         throw new ChecksumValidationIOException(this.sha1, calculatedSha1);
       }
-      this.events.moveTempFileStarted(this.tempPath, this.path);
       Files.move(this.tempPath, this.path, REPLACE_EXISTING, REPLACE_EXISTING);
       Files.setLastModifiedTime(this.path, fromMillis(this.mtime));
-      this.events.moveTempFileComplete();
     } finally {
       this.channel.close();
     }

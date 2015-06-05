@@ -12,15 +12,21 @@ import com.salesforce.zsync4j.Zsync.Options;
 
 
 /**
- * A {@link ZsyncObserver} that repeats observed events to a configurable list of additional zsync observers.
+ * A {@link ZsyncObserver} that forwards observed events to a configurable list of additional zsync observers.
  *
  * @author bstclair
  */
-public class RepeatingZsyncObserver implements ZsyncObserver {
+public class ForwardingZsyncObserver extends ZsyncObserver {
 
   private Set<ZsyncObserver> observers = new HashSet<>();
 
-  public RepeatingZsyncObserver() {}
+  public ForwardingZsyncObserver(ZsyncObserver... targets) {
+    if (targets != null) {
+      for (ZsyncObserver observer : targets) {
+        this.addObserver(observer);
+      }
+    }
+  }
 
   @Override
   public void bytesDownloaded(long bytes) {
@@ -33,7 +39,7 @@ public class RepeatingZsyncObserver implements ZsyncObserver {
     this.observers.add(observer);
   }
 
-  public void removeZsyncObserver(ZsyncObserver observer) {
+  public void removeObserver(ZsyncObserver observer) {
     this.observers.remove(observer);
   }
 
@@ -94,30 +100,9 @@ public class RepeatingZsyncObserver implements ZsyncObserver {
   }
 
   @Override
-  public void sha1CalculationStarted(Path file) {
+  public void sha1Calculated(String sha1) {
     for (ZsyncObserver observer : this.observers) {
-      observer.sha1CalculationStarted(file);
-    }
-  }
-
-  @Override
-  public void sha1CalculationComplete(String sha1) {
-    for (ZsyncObserver observer : this.observers) {
-      observer.sha1CalculationComplete(sha1);
-    }
-  }
-
-  @Override
-  public void moveTempFileStarted(Path tempFile, Path targetFile) {
-    for (ZsyncObserver observer : this.observers) {
-      observer.moveTempFileStarted(tempFile, targetFile);
-    }
-  }
-
-  @Override
-  public void moveTempFileComplete() {
-    for (ZsyncObserver observer : this.observers) {
-      observer.moveTempFileComplete();
+      observer.sha1Calculated(sha1);
     }
   }
 

@@ -21,11 +21,9 @@ import com.salesforce.zsync4j.Zsync.Options.Credentials;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ChecksumValidationIOException;
 import com.salesforce.zsync4j.internal.ControlFile;
+import com.salesforce.zsync4j.internal.ForwardingZsyncObserver;
 import com.salesforce.zsync4j.internal.Header;
-import com.salesforce.zsync4j.internal.HttpTransferObserverToZsyncObserverAdapter;
 import com.salesforce.zsync4j.internal.OutputFile;
-import com.salesforce.zsync4j.internal.OutputFileObserverToZsyncObserverAdapter;
-import com.salesforce.zsync4j.internal.RepeatingZsyncObserver;
 import com.salesforce.zsync4j.internal.ResultsBuilder;
 import com.salesforce.zsync4j.internal.ZsyncObserver;
 import com.salesforce.zsync4j.internal.ZsyncObserverToPartialResponseBodyTransferListenerAdapter;
@@ -98,8 +96,6 @@ public class Zsync {
     private Path saveZsyncFile;
     private URI zsyncUri;
     private Map<String, Credentials> credentials = new HashMap<>(2);
-    private OutputFileObserver outputFileObserver;
-    private HttpTransferObserver httpTransferObserver;
 
     public Options() {
       super();
@@ -112,8 +108,6 @@ public class Zsync {
         this.saveZsyncFile = other.saveZsyncFile;
         this.zsyncUri = other.zsyncUri;
         this.credentials.putAll(other.credentials);
-        this.outputFileObserver = other.outputFileObserver;
-        this.httpTransferObserver = other.httpTransferObserver;
       }
     }
 
@@ -148,24 +142,6 @@ public class Zsync {
     public Options setOutputFile(Path outputFile) {
       this.outputFile = outputFile;
       return this;
-    }
-
-    public Options setOutputFileObserver(OutputFileObserver outputFileObserver) {
-      this.outputFileObserver = outputFileObserver;
-      return this;
-    }
-
-    public OutputFileObserver getOutputFileObserver() {
-      return this.outputFileObserver;
-    }
-
-    public Options setHttpTransferObserver(HttpTransferObserver httpTransferObserver) {
-      this.httpTransferObserver = httpTransferObserver;
-      return this;
-    }
-
-    public HttpTransferObserver getHttpTransferObserver() {
-      return this.httpTransferObserver;
     }
 
     /**
@@ -257,14 +233,15 @@ public class Zsync {
   }
 
   public ZsyncResults zsync(URI zsyncFile, Options options) throws ZsyncException {
-    ResultsBuilder resultsBuilder = new ResultsBuilder(options);
-    RepeatingZsyncObserver events = new RepeatingZsyncObserver();
+    return this.zsync(zsyncFile, options, new ZsyncObserver());
+  }
+
+  public ZsyncResults zsync(URI zsyncFile, Options options, ZsyncObserver observer) throws ZsyncException {
+    ResultsBuilder resultsBuilder = new ResultsBuilder();
+    ForwardingZsyncObserver events = new ForwardingZsyncObserver();
     events.addObserver(resultsBuilder);
-    if (options.getOutputFileObserver() != null) {
-      events.addObserver(new OutputFileObserverToZsyncObserverAdapter(options.getOutputFileObserver()));
-    }
-    if (options.getHttpTransferObserver() != null) {
-      events.addObserver(new HttpTransferObserverToZsyncObserverAdapter(options.getHttpTransferObserver()));
+    if (observer != null) {
+      events.addObserver(observer);
     }
     try {
       options = new Options(options); // Copy, since the supplied Options is mutable
@@ -332,7 +309,7 @@ public class Zsync {
         outputFileComplete = targetFile.isComplete();
       }
       if (!outputFileComplete) {
-        throw new InternalZsyncException("Output file does not appear to be complete, but it should be");
+        throw new RuntimeException("Output file does not appear to be complete, but it should be");
       }
     } catch (ChecksumValidationIOException exception) {
       throw new ZsyncChecksumValidationFailedException("Calculated checksum does not match expected checksum");
