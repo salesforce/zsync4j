@@ -3,29 +3,35 @@
  */
 package com.salesforce.zsync4j.internal;
 
+import static com.google.common.collect.ImmutableList.copyOf;
+
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.salesforce.zsync4j.Zsync.Options;
+import com.salesforce.zsync4j.ZsyncObserver;
 
 
 /**
- * A {@link ZsyncObserver} that forwards observed events to a configurable list of additional zsync observers.
+ * A {@link ZsyncObserver} that forwards observed events to a configurable list of additional zsync
+ * observers.
  *
  * @author bstclair
  */
 public class ForwardingZsyncObserver extends ZsyncObserver {
 
-  private Set<ZsyncObserver> observers = new HashSet<>();
+  private List<ZsyncObserver> observers;
 
   public ForwardingZsyncObserver(ZsyncObserver... targets) {
-    if (targets != null) {
-      for (ZsyncObserver observer : targets) {
-        this.addObserver(observer);
-      }
-    }
+    this(targets == null ? ImmutableList.<ZsyncObserver>of() : ImmutableList.copyOf(targets));
+  }
+
+  public ForwardingZsyncObserver(Iterable<? extends ZsyncObserver> observers) {
+    Preconditions.checkNotNull(observers);
+    this.observers = copyOf(observers);
   }
 
   @Override
@@ -51,58 +57,65 @@ public class ForwardingZsyncObserver extends ZsyncObserver {
   }
 
   @Override
-  public void controlFileProcessingStarted(URI controlFileUri) {
+  public void controlFileDownloadingStarted(URI uri, long length) {
     for (ZsyncObserver observer : this.observers) {
-      observer.controlFileProcessingStarted(controlFileUri);
+      observer.controlFileDownloadingStarted(uri, length);
     }
   }
 
   @Override
-  public void controlFileProcessingComplete(ControlFile controlFile) {
+  public void controlFileDownloadingComplete() {
     for (ZsyncObserver observer : this.observers) {
-      observer.controlFileProcessingComplete(controlFile);
+      observer.controlFileDownloadingComplete();
     }
   }
 
   @Override
-  public void inputFileProcessingStarted(Path inputFile) {
+  public void controlFileReadingStarted(Path path, long length) {
     for (ZsyncObserver observer : this.observers) {
-      observer.inputFileProcessingStarted(inputFile);
+      observer.controlFileReadingStarted(path, length);
     }
   }
 
   @Override
-  public void inputFileProcessingComplete(Path inputFile) {
+  public void controlFileReadingComplete() {
     for (ZsyncObserver observer : this.observers) {
-      observer.inputFileProcessingComplete(inputFile);
+      observer.controlFileReadingComplete();
     }
   }
 
   @Override
-  public void remoteFileProcessingStarted(URI remoteUri, long expectedBytes, long expectedBlocks, long expectedRequests) {
+  public void inputFileReadingStarted(Path inputFile, long length) {
     for (ZsyncObserver observer : this.observers) {
-      observer.remoteFileProcessingStarted(remoteUri, expectedBytes, expectedBlocks, expectedRequests);
+      observer.inputFileReadingStarted(inputFile, length);
     }
   }
 
   @Override
-  public void remoteFileProcessingComplete() {
+  public void inputFileReadingComplete() {
     for (ZsyncObserver observer : this.observers) {
-      observer.remoteFileProcessingComplete();
+      observer.inputFileReadingComplete();
     }
   }
 
   @Override
-  public void bytesWritten(Path file, long bytes) {
+  public void remoteFileDownloadingStarted(URI uri, long length) {
     for (ZsyncObserver observer : this.observers) {
-      observer.bytesWritten(file, bytes);
+      observer.remoteFileDownloadingStarted(uri, length);
     }
   }
 
   @Override
-  public void sha1Calculated(String sha1) {
+  public void remoteFileDownloadingComplete() {
     for (ZsyncObserver observer : this.observers) {
-      observer.sha1Calculated(sha1);
+      observer.remoteFileDownloadingComplete();
+    }
+  }
+
+  @Override
+  public void bytesWritten(long bytes) {
+    for (ZsyncObserver observer : this.observers) {
+      observer.bytesWritten(bytes);
     }
   }
 
@@ -110,13 +123,6 @@ public class ForwardingZsyncObserver extends ZsyncObserver {
   public void zsyncFailed(Exception exception) {
     for (ZsyncObserver observer : this.observers) {
       observer.zsyncFailed(exception);
-    }
-  }
-
-  @Override
-  public void outputFileResolved(Path outputFile) {
-    for (ZsyncObserver observer : this.observers) {
-      observer.outputFileResolved(outputFile);
     }
   }
 

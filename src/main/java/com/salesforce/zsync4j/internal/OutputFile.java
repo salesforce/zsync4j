@@ -24,6 +24,8 @@ import com.google.common.collect.ListMultimap;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
 import com.salesforce.zsync4j.internal.util.Range;
 import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
+import com.salesforce.zsync4j.internal.util.TransferListener;
+import com.salesforce.zsync4j.internal.util.TransferListener.ResourceTransferListener;
 import com.salesforce.zsync4j.internal.util.ZsyncUtil;
 
 public class OutputFile implements RangeReceiver, Closeable {
@@ -43,11 +45,21 @@ public class OutputFile implements RangeReceiver, Closeable {
   private final FileChannel channel;
   private final boolean[] completed;
   private int blocksRemaining;
-  private ZsyncObserver events;
+  private TransferListener listener;
 
-  public OutputFile(Path path, ControlFile controlFile, ZsyncObserver events) throws IOException {
+  public OutputFile(Path path, ControlFile controlFile, ResourceTransferListener<Path> listener) throws IOException {
     this.path = path;
-    this.events = events;
+    this.listener = listener;
+
+    final Header header = controlFile.getHeader();
+    this.blockSize = header.getBlocksize();
+    this.length = header.getLength();
+    this.lastBlockSize = (int) (this.length % this.blockSize == 0 ? this.blockSize : this.length % this.blockSize);
+    this.sha1 = header.getSha1();
+    this.mtime = header.getMtime().getTime();
+
+    listener.start(this.path, this.length);
+
     final String tmpName = path.getFileName().toString() + ".part";
     final Path parent = path.getParent();
     if (parent != null) {
@@ -58,12 +70,6 @@ public class OutputFile implements RangeReceiver, Closeable {
     }
     this.channel = FileChannel.open(this.tempPath, CREATE, WRITE, READ);
 
-    final Header header = controlFile.getHeader();
-    this.blockSize = header.getBlocksize();
-    this.length = header.getLength();
-    this.lastBlockSize = (int) (this.length % this.blockSize == 0 ? this.blockSize : this.length % this.blockSize);
-    this.sha1 = header.getSha1();
-    this.mtime = header.getMtime().getTime();
 
     this.blockSums = ImmutableList.copyOf(controlFile.getBlockSums());
     this.positions = indexPositions(this.blockSums);
@@ -103,7 +109,7 @@ public class OutputFile implements RangeReceiver, Closeable {
     try {
       this.channel.position(position * this.blockSize);
       data.write(this.channel, offset, l);
-      this.events.bytesWritten(this.tempPath, l);
+      this.listener.transferred(l);
     } catch (IOException e) {
       throw new RuntimeException("Failed to read block at position " + position, e);
     }
@@ -154,7 +160,7 @@ public class OutputFile implements RangeReceiver, Closeable {
     do {
       long transferred = this.channel.transferFrom(src, range.first, size);
       remaining -= transferred;
-      this.events.bytesWritten(this.tempPath, transferred);
+      this.listener.transferred(transferred);
     } while (remaining > 0);
 
     final int first = (int) (range.first / this.blockSize);
@@ -171,13 +177,8 @@ public class OutputFile implements RangeReceiver, Closeable {
   @Override
   public void close() throws IOException {
     try {
-      if (!this.isComplete()) {
-        throw new RuntimeException("An internal zsync error occurred, target is missing the following ranges: "
-            + this.getMissingRanges());
-      }
       this.channel.position(0); // reset channel to beginning to compute full SHA1
       String calculatedSha1 = ZsyncUtil.computeSha1(this.channel);
-      this.events.sha1Calculated(calculatedSha1);
       if (!this.sha1.equals(calculatedSha1)) {
         throw new ChecksumValidationIOException(this.sha1, calculatedSha1);
       }
@@ -185,6 +186,8 @@ public class OutputFile implements RangeReceiver, Closeable {
       Files.setLastModifiedTime(this.path, fromMillis(this.mtime));
     } finally {
       this.channel.close();
+      this.listener.close();
     }
   }
+
 }

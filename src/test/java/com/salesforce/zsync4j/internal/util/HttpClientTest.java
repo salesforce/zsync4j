@@ -20,12 +20,11 @@ import org.junit.Test;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Closed;
-import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Completed;
 import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Event;
 import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Progressed;
 import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Started;
-import com.salesforce.zsync4j.internal.util.HttpClient.PartialResponseBodyTransferListener;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
+import com.salesforce.zsync4j.internal.util.HttpClient.RangeTransferListener;
 import com.squareup.okhttp.Call;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Protocol;
@@ -52,7 +51,7 @@ public class HttpClientTest {
     // Arrange
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
-    PartialResponseBodyTransferListener listener = mock(PartialResponseBodyTransferListener.class);
+    RangeTransferListener listener = mock(RangeTransferListener.class);
     List<Range> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
     IOException expected = new IOException("IO");
@@ -76,7 +75,7 @@ public class HttpClientTest {
     List<Integer> responsesToTest = Lists.newArrayList(500, 413); // Add whatever other ones we want
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
-    PartialResponseBodyTransferListener listener = mock(PartialResponseBodyTransferListener.class);
+    RangeTransferListener listener = mock(RangeTransferListener.class);
     List<Range> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
 
@@ -108,7 +107,7 @@ public class HttpClientTest {
 
   @Test
   public void testTransferListener() throws IOException {
-    final URI uri = URI.create("tmp");
+    final URI uri = URI.create("http://bla");
 
     final byte[] data = new byte[17];
     final ResponseBody body = mock(ResponseBody.class);
@@ -135,8 +134,8 @@ public class HttpClientTest {
     in.close();
 
     final List<Event> events =
-        ImmutableList.of(new Started(uri.toString(), data.length), new Progressed(1), new Progressed(8),
-            new Progressed(8), Completed.INSTANCE, Closed.INSTANCE);
+        ImmutableList.of(new Started(uri, data.length), new Progressed(1), new Progressed(8), new Progressed(8),
+            Closed.INSTANCE);
     assertEquals(events, listener.getEventLog());
   }
 
