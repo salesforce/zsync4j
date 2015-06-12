@@ -128,7 +128,9 @@ public class DoubleBlockMatcher extends BlockMatcher {
   private int matchedBoth(OutputFile outputFile, ReadableByteBuffer buffer) {
     for (int p : this.matches) {
       outputFile.writeBlock(p, buffer, 0);
-      outputFile.writeBlock(p + 1, buffer, this.blockSize);
+      if (++p != outputFile.getNumBlocks()) {
+        outputFile.writeBlock(p, buffer, this.blockSize);
+      }
     }
     this.state = MATCHED_BOTH;
     return this.blockSize;
