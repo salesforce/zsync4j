@@ -19,10 +19,12 @@ import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.salesforce.zsync4j.http.ContentRange;
 import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Closed;
 import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Event;
 import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Progressed;
 import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Started;
+import com.salesforce.zsync4j.internal.util.HttpClient.HttpTransferListener;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeTransferListener;
 import com.squareup.okhttp.Call;
@@ -46,13 +48,15 @@ public class HttpClientTest {
     }
   }
 
+  @SuppressWarnings("unchecked")
   @Test
   public void runtimeExceptionThrownForIoExceptionDuringHttpCommunication() throws Exception {
     // Arrange
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
     RangeTransferListener listener = mock(RangeTransferListener.class);
-    List<Range> ranges = this.createSomeRanges(1);
+    when(listener.newTransfer(any(List.class))).thenReturn(mock(HttpTransferListener.class));
+    List<ContentRange> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
     IOException expected = new IOException("IO");
     Call mockCall = mock(Call.class);
@@ -69,6 +73,7 @@ public class HttpClientTest {
     }
   }
 
+  @SuppressWarnings("unchecked")
   @Test
   public void runtimeExceptionThrownForHttpResponsesOtherThan206() throws Exception {
     // Arrange
@@ -76,7 +81,8 @@ public class HttpClientTest {
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     RangeReceiver mockReceiver = mock(RangeReceiver.class);
     RangeTransferListener listener = mock(RangeTransferListener.class);
-    List<Range> ranges = this.createSomeRanges(1);
+    when(listener.newTransfer(any(List.class))).thenReturn(mock(HttpTransferListener.class));
+    List<ContentRange> ranges = this.createSomeRanges(1);
     URI url = new URI("someurl");
 
     for (Integer responseToTest : responsesToTest) {
@@ -139,14 +145,14 @@ public class HttpClientTest {
     assertEquals(events, listener.getEventLog());
   }
 
-  private List<Range> createSomeRanges(int numberOfRangesToCreate) {
-    List<Range> ranges = new ArrayList<>(numberOfRangesToCreate);
+  private List<ContentRange> createSomeRanges(int numberOfRangesToCreate) {
+    List<ContentRange> ranges = new ArrayList<>(numberOfRangesToCreate);
     int rangeStart = 0;
     int rangeSize = 10;
     for (int i = 0; i < numberOfRangesToCreate; i++) {
       rangeStart = i * rangeSize;
       int rangeEnd = rangeStart + rangeSize - 1;
-      ranges.add(new Range(rangeStart, rangeEnd));
+      ranges.add(new ContentRange(rangeStart, rangeEnd));
     }
     return ranges;
   }

@@ -1,7 +1,10 @@
 package com.salesforce.zsync4j;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -9,6 +12,7 @@ import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
 import com.salesforce.zsync4j.Zsync.Options;
+import com.salesforce.zsync4j.http.ContentRange;
 
 public interface ZsyncStats {
 
@@ -22,17 +26,36 @@ public interface ZsyncStats {
 
   long getBytesDownloadedFromRemoteFile();
 
-  long getTotalElapsedMilliseconds();
-
   Map<Path, Long> getTotalBytesWrittenByInputFile();
 
   Map<Path, Long> getTotalBytesReadByInputFile();
 
+  long getTotalElapsedMilliseconds();
+
+  long getElapsedMillisecondsDownloading();
+
+  long getElapsedMillisecondsDownloadingControlFile();
+
+  long getElapsedMillisecondsDownloadingRemoteFile();
+
+  Map<List<ContentRange>, Long> getElapsedMillisecondsDownloadingRemoteFileByRequest();
+
   public static class Observer extends ZsyncObserver {
+
+    // time
+
+    private final Stopwatch stopwatch = Stopwatch.createUnstarted();
+    private final Stopwatch downloadStopwatch = Stopwatch.createUnstarted();
+    private long elapsedMillisDownloading = 0;
+    private long elapsedMillisDownloadingControlFile = 0;
+    private long elapsedMillisDownloadingRemoteFile = 0;
+    private final Builder<List<ContentRange>, Long> elapsedMillisByRangeRequest = ImmutableMap.builder();
+    private List<ContentRange> ranges;
+
+    // data
 
     private final Builder<Path, Long> bytesWrittenByInputFile = ImmutableMap.builder();
     private final Builder<Path, Long> bytesReadByInputFile = ImmutableMap.builder();
-    private final Stopwatch stopwatch = Stopwatch.createUnstarted();
 
     private long bytesRead = 0;
     private long bytesWritten = 0;
@@ -60,7 +83,15 @@ public interface ZsyncStats {
     }
 
     @Override
+    public void controlFileDownloadingInitiated(URI uri) {
+      this.downloadStopwatch.start();
+    }
+
+    @Override
     public void controlFileDownloadingComplete() {
+      this.elapsedMillisDownloadingControlFile += this.downloadStopwatch.stop().elapsed(MILLISECONDS);
+      this.downloadStopwatch.reset();
+      this.elapsedMillisDownloading += elapsedMillisDownloadingControlFile;
       this.bytesDownloadedForControlFile = this.bytesDownloaded;
       this.totalBytesDownloaded += this.bytesDownloaded;
       this.bytesDownloaded = 0;
@@ -108,12 +139,24 @@ public interface ZsyncStats {
     }
 
     @Override
+    public void remoteFileDownloadingInitiated(URI uri, List<ContentRange> ranges) {
+      this.downloadStopwatch.start();
+      this.ranges = ranges;
+    }
+
+    @Override
     public void remoteFileDownloadingStarted(URI uri, long length) {
       this.bytesDownloaded = 0;
     }
 
     @Override
     public void remoteFileDownloadingComplete() {
+      final long millis = this.downloadStopwatch.stop().elapsed(MILLISECONDS);
+      this.downloadStopwatch.reset();
+      this.elapsedMillisDownloadingRemoteFile += millis;
+      this.elapsedMillisDownloading += millis;
+      this.elapsedMillisByRangeRequest.put(ranges, millis);
+      ranges = null;
       this.bytesDownloadedFromRemoteTarget += this.bytesDownloaded;
       this.totalBytesDownloaded += this.bytesDownloaded;
       this.bytesDownloaded = 0;
@@ -143,6 +186,10 @@ public interface ZsyncStats {
       final Map<Path, Long> bytesWrittenByInputFile = this.bytesWrittenByInputFile.build();
       final Map<Path, Long> bytesReadByInputFile = this.bytesReadByInputFile.build();
       final long totalElapsedMilliseconds = this.stopwatch.elapsed(TimeUnit.MILLISECONDS);
+      final long elapsedMillisecondsDownloading = this.elapsedMillisDownloading;
+      final long elapsedMillisecondsDownloadingControlFile = this.elapsedMillisDownloadingControlFile;
+      final long elapsedMillisecondsDownloadingRemoteFile = this.elapsedMillisDownloadingRemoteFile;
+      final Map<List<ContentRange>, Long> elapsedMillisByRangeRequest = this.elapsedMillisByRangeRequest.build();
       final long totalBytesDownloaded = this.totalBytesDownloaded;
       final long bytesDownloadedForControlFile = this.bytesDownloadedForControlFile;
       final long bytesDownloadedFromRemoteTarget = this.bytesDownloadedFromRemoteTarget;
@@ -166,11 +213,6 @@ public interface ZsyncStats {
         }
 
         @Override
-        public long getTotalElapsedMilliseconds() {
-          return totalElapsedMilliseconds;
-        }
-
-        @Override
         public long getTotalBytesRead() {
           return totalBytesRead;
         }
@@ -188,6 +230,31 @@ public interface ZsyncStats {
         @Override
         public Map<Path, Long> getTotalBytesReadByInputFile() {
           return bytesReadByInputFile;
+        }
+
+        @Override
+        public long getTotalElapsedMilliseconds() {
+          return totalElapsedMilliseconds;
+        }
+
+        @Override
+        public long getElapsedMillisecondsDownloading() {
+          return elapsedMillisecondsDownloading;
+        }
+
+        @Override
+        public long getElapsedMillisecondsDownloadingControlFile() {
+          return elapsedMillisecondsDownloadingControlFile;
+        }
+
+        @Override
+        public long getElapsedMillisecondsDownloadingRemoteFile() {
+          return elapsedMillisecondsDownloadingRemoteFile;
+        }
+
+        @Override
+        public Map<List<ContentRange>, Long> getElapsedMillisecondsDownloadingRemoteFileByRequest() {
+          return elapsedMillisByRangeRequest;
         }
       };
     }

@@ -5,10 +5,11 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.salesforce.zsync4j.internal.util.TransferListener.ResourceTransferListener;
+import com.salesforce.zsync4j.internal.util.HttpClient.HttpTransferListener;
+import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 
-class EventLogTransferListener implements ResourceTransferListener<Response> {
+class EventLogTransferListener implements HttpTransferListener {
 
   static interface Event {
     @Override
@@ -115,6 +116,12 @@ class EventLogTransferListener implements ResourceTransferListener<Response> {
 
   public List<EventLogTransferListener.Event> getEventLog() {
     return this.eventLog;
+  }
+
+  @Override
+  public void initiating(Request request) {
+    // TODO Auto-generated method stub
+    
   }
 
   @Override

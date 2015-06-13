@@ -25,6 +25,7 @@ import com.salesforce.zsync4j.internal.EventDispatcher;
 import com.salesforce.zsync4j.internal.Header;
 import com.salesforce.zsync4j.internal.OutputFile;
 import com.salesforce.zsync4j.internal.util.HttpClient;
+import com.salesforce.zsync4j.internal.util.HttpClient.HttpTransferListener;
 import com.salesforce.zsync4j.internal.util.ObservableInputStream;
 import com.salesforce.zsync4j.internal.util.ObservableRedableByteChannel.ObservableReadableResourceChannel;
 import com.salesforce.zsync4j.internal.util.RollingBuffer;
@@ -296,8 +297,8 @@ public class Zsync {
 
     try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, events.getOutputFileWriteListener())) {
       if (!this.processInputFiles(targetFile, controlFile, options.getInputFiles(), events)) {
-        httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(), targetFile,
-            events.getRemoteFileDownloadListener());
+        httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(),
+            events.getRangeReceiverListener(targetFile), events.getRemoteFileDownloadListener());
       }
     } catch (ChecksumValidationIOException exception) {
       throw new ZsyncChecksumValidationFailedException("Calculated checksum does not match expected checksum");
@@ -333,7 +334,7 @@ public class Zsync {
       if (path == null) {
         // TODO we may want to set the redirect URL resulting from processing the http request
         options.setZsyncFileSource(zsyncFile);
-        final ResourceTransferListener<Response> listener = events.getControlFileDownloadListener();
+        final HttpTransferListener listener = events.getControlFileDownloadListener();
         // check if we should persist the file locally
         final Path savePath = options.getSaveZsyncFile();
         if (savePath == null) {
@@ -479,6 +480,7 @@ public class Zsync {
         .println("Total bytes downloaded: " + stats.getTotalBytesDownloaded() + " (control file: "
             + stats.getBytesDownloadedForControlFile() + ", remote file: " + stats.getBytesDownloadedFromRemoteFile()
             + ")");
-    System.out.println("Total time: " + stats.getTotalElapsedMilliseconds() + " ms");
+    System.out.println("Total time: " + stats.getTotalElapsedMilliseconds() + " ms. Of which downloading "
+        + stats.getElapsedMillisecondsDownloading() + " ms");
   }
 }

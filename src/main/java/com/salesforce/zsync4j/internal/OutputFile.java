@@ -21,8 +21,8 @@ import java.util.List;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
+import com.salesforce.zsync4j.http.ContentRange;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
-import com.salesforce.zsync4j.internal.util.Range;
 import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
 import com.salesforce.zsync4j.internal.util.TransferListener;
 import com.salesforce.zsync4j.internal.util.TransferListener.ResourceTransferListener;
@@ -117,14 +117,14 @@ public class OutputFile implements RangeReceiver, Closeable {
     return this.completed[position] = true;
   }
 
-  public List<Range> getMissingRanges() {
-    final ImmutableList.Builder<Range> b = ImmutableList.builder();
+  public List<ContentRange> getMissingRanges() {
+    final ImmutableList.Builder<ContentRange> b = ImmutableList.builder();
     long start = -1;
     for (int i = 0; i < this.completed.length; i++) {
       if (this.completed[i]) {
         // if we're in a range, end it
         if (start != -1) {
-          b.add(new Range(start, i * this.blockSize - 1));
+          b.add(new ContentRange(start, i * this.blockSize - 1));
           start = -1;
         }
       } else {
@@ -134,7 +134,7 @@ public class OutputFile implements RangeReceiver, Closeable {
         }
         // if this is the last block in the file map, we need to end the range
         if (i == this.completed.length - 1) {
-          b.add(new Range(start, this.length - 1));
+          b.add(new ContentRange(start, this.length - 1));
         }
       }
     }
@@ -146,11 +146,11 @@ public class OutputFile implements RangeReceiver, Closeable {
   }
 
   @Override
-  public void receive(Range range, InputStream in) throws IOException {
-    if (range.first % this.blockSize != 0) {
+  public void receive(ContentRange range, InputStream in) throws IOException {
+    if (range.first() % this.blockSize != 0) {
       throw new RuntimeException("Invalid range received: first byte not block aligned");
     }
-    if ((range.last + 1) % this.blockSize != 0 && range.last + 1 != this.length) {
+    if ((range.last() + 1) % this.blockSize != 0 && range.last() + 1 != this.length) {
       throw new RuntimeException("Invalid range received: last byte not block aligned");
     }
 
@@ -158,14 +158,14 @@ public class OutputFile implements RangeReceiver, Closeable {
     final long size = range.size();
     long remaining = size;
     do {
-      long transferred = this.channel.transferFrom(src, range.first, size);
+      long transferred = this.channel.transferFrom(src, range.first(), size);
       remaining -= transferred;
       this.listener.transferred(transferred);
     } while (remaining > 0);
 
-    final int first = (int) (range.first / this.blockSize);
+    final int first = (int) (range.first() / this.blockSize);
     final int last =
-        (int) (range.last + 1 == this.length ? this.completed.length - 1 : (range.last + 1) / this.blockSize - 1);
+        (int) (range.last() + 1 == this.length ? this.completed.length - 1 : (range.last() + 1) / this.blockSize - 1);
     for (int i = first; i <= last; i++) {
       if (!this.completed[i]) {
         this.blocksRemaining--;
