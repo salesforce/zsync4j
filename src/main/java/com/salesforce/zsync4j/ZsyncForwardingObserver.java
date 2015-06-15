@@ -21,15 +21,15 @@ import com.salesforce.zsync4j.http.ContentRange;
  *
  * @author bstclair
  */
-public class ForwardingZsyncObserver extends ZsyncObserver {
+public class ZsyncForwardingObserver extends ZsyncObserver {
 
   private List<ZsyncObserver> observers;
 
-  public ForwardingZsyncObserver(ZsyncObserver... targets) {
+  public ZsyncForwardingObserver(ZsyncObserver... targets) {
     this(targets == null ? ImmutableList.<ZsyncObserver>of() : ImmutableList.copyOf(targets));
   }
 
-  public ForwardingZsyncObserver(Iterable<? extends ZsyncObserver> observers) {
+  public ZsyncForwardingObserver(Iterable<? extends ZsyncObserver> observers) {
     Preconditions.checkNotNull(observers);
     this.observers = copyOf(observers);
   }

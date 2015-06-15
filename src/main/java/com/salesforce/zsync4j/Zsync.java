@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.salesforce.zsync4j.Zsync.Options.Credentials;
+import com.salesforce.zsync4j.ZsyncStatsObserver.ZsyncStats;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ChecksumValidationIOException;
 import com.salesforce.zsync4j.internal.ControlFile;
@@ -469,7 +470,7 @@ public class Zsync {
     final URI uri = URI.create(args[args.length - 1]);
 
     final Zsync zsync = new Zsync(new OkHttpClient());
-    final ZsyncStats.Observer observer = new ZsyncStats.Observer();
+    final ZsyncStatsObserver observer = new ZsyncStatsObserver();
     zsync.zsync(uri, options, observer);
     final ZsyncStats stats = observer.build();
     System.out.println("Total bytes written: " + stats.getTotalBytesWritten() + " (by input file: "
