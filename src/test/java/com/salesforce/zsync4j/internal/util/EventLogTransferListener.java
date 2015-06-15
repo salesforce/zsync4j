@@ -1,12 +1,15 @@
 package com.salesforce.zsync4j.internal.util;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.salesforce.zsync4j.internal.util.HttpClient.ResponseBodyTransferListener;
+import com.salesforce.zsync4j.internal.util.HttpClient.HttpTransferListener;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 
-class EventLogTransferListener implements ResponseBodyTransferListener {
+class EventLogTransferListener implements HttpTransferListener {
 
   static interface Event {
     @Override
@@ -17,10 +20,10 @@ class EventLogTransferListener implements ResponseBodyTransferListener {
   }
 
   static class Started implements EventLogTransferListener.Event {
-    private final String uri;
+    private final URI uri;
     private final long totalBytes;
 
-    Started(String uri, long totalBytes) {
+    Started(URI uri, long totalBytes) {
       this.uri = uri;
       this.totalBytes = totalBytes;
     }
@@ -62,9 +65,9 @@ class EventLogTransferListener implements ResponseBodyTransferListener {
   }
 
   static class Progressed implements EventLogTransferListener.Event {
-    private final int bytes;
+    private final long bytes;
 
-    public Progressed(int bytes) {
+    public Progressed(long bytes) {
       super();
       this.bytes = bytes;
     }
@@ -73,7 +76,7 @@ class EventLogTransferListener implements ResponseBodyTransferListener {
     public int hashCode() {
       final int prime = 31;
       int result = 1;
-      result = prime * result + this.bytes;
+      result = prime * result + (int) (this.bytes ^ (this.bytes >>> 32));
       return result;
     }
 
@@ -88,56 +91,8 @@ class EventLogTransferListener implements ResponseBodyTransferListener {
       if (getClass() != obj.getClass()) {
         return false;
       }
-      EventLogTransferListener.Progressed other = (EventLogTransferListener.Progressed) obj;
+      Progressed other = (Progressed) obj;
       if (this.bytes != other.bytes) {
-        return false;
-      }
-      return true;
-    }
-
-  }
-
-  static class Completed implements EventLogTransferListener.Event {
-    static final EventLogTransferListener.Completed INSTANCE = new Completed();
-
-    private Completed() {
-      super();
-    }
-  }
-
-  static class Failed implements EventLogTransferListener.Event {
-    private final IOException exception;
-
-    public Failed(IOException exception) {
-      super();
-      this.exception = exception;
-    }
-
-    @Override
-    public int hashCode() {
-      final int prime = 31;
-      int result = 1;
-      result = prime * result + ((this.exception == null) ? 0 : this.exception.hashCode());
-      return result;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (obj == null) {
-        return false;
-      }
-      if (getClass() != obj.getClass()) {
-        return false;
-      }
-      EventLogTransferListener.Failed other = (EventLogTransferListener.Failed) obj;
-      if (this.exception == null) {
-        if (other.exception != null) {
-          return false;
-        }
-      } else if (!this.exception.equals(other.exception)) {
         return false;
       }
       return true;
@@ -164,27 +119,27 @@ class EventLogTransferListener implements ResponseBodyTransferListener {
   }
 
   @Override
-  public void transferStarted(String uri, long totalBytes) {
-    this.eventLog.add(new Started(uri, totalBytes));
+  public void initiating(Request request) {
+    // TODO Auto-generated method stub
+    
   }
 
   @Override
-  public void transferProgressed(int bytes) {
+  public void start(Response response, long totalBytes) {
+    try {
+      this.eventLog.add(new Started(response.request().uri(), totalBytes));
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  public void transferred(long bytes) {
     this.eventLog.add(new Progressed(bytes));
   }
 
   @Override
-  public void transferFailed(IOException exception) {
-    this.eventLog.add(new Failed(exception));
-  }
-
-  @Override
-  public void transferComplete() {
-    this.eventLog.add(Completed.INSTANCE);
-  }
-
-  @Override
-  public void transferClosed() {
+  public void close() {
     this.eventLog.add(Closed.INSTANCE);
   }
 

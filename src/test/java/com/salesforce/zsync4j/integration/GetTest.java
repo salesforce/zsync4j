@@ -16,7 +16,6 @@ import org.junit.Test;
 
 import com.salesforce.zsync4j.Zsync;
 import com.salesforce.zsync4j.Zsync.Options;
-import com.salesforce.zsync4j.ZsyncResults;
 import com.squareup.okhttp.OkHttpClient;
 
 /**
@@ -37,10 +36,10 @@ public class GetTest extends BaseJettyTest {
     Options options = new Options().addInputFile(Paths.get(oldGuava.toURI())).setOutputFile(outputPath);
 
     // Act
-    ZsyncResults results = new Zsync(new OkHttpClient()).zsync(uri, options);
+    Path result = new Zsync(new OkHttpClient()).zsync(uri, options);
 
     // Assert
-    assertEquals("results has wrong output file path", outputPath, results.getOutputFile());
+    assertEquals("results has wrong output file path", outputPath, result);
   }
 
   @Test

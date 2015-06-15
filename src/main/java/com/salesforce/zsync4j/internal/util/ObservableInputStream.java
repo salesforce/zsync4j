@@ -4,28 +4,19 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
+import com.salesforce.zsync4j.internal.util.TransferListener.ResourceTransferListener;
+
 /**
- * An input stream wrapper that lets you observe some things about bytes read from the wrapped {@link InputStream}.
+ * An input stream wrapper that lets you observe some things about bytes read from the wrapped
+ * {@link InputStream}.
  *
  * @author bstclair
  */
 public class ObservableInputStream extends FilterInputStream {
 
-  /**
-   * Notified when interesting things are observed on the wrapped {@link InputStream}.
-   *
-   * @author bstclair
-   */
-  public static interface Observer {
-    void bytesRead(long bytesRead, long totalBytesRead);
+  private final TransferListener observer;
 
-    void done(long totalBytesRead);
-  }
-
-  private final Observer observer;
-  private long totalBytesRead;
-
-  public ObservableInputStream(InputStream in, Observer observer) {
+  public ObservableInputStream(InputStream in, TransferListener observer) {
     super(in);
     this.observer = observer;
   }
@@ -34,7 +25,7 @@ public class ObservableInputStream extends FilterInputStream {
   public int read() throws IOException {
     final int i = super.read();
     if (i >= 0) {
-      this.observer.bytesRead(1, ++this.totalBytesRead);
+      this.observer.transferred(1);
     }
     return i;
   }
@@ -43,14 +34,31 @@ public class ObservableInputStream extends FilterInputStream {
   public int read(byte[] b, int off, int len) throws IOException {
     final int i = super.read(b, off, len);
     if (i >= 0) {
-      this.observer.bytesRead(i, (this.totalBytesRead += i));
+      this.observer.transferred(i);
     }
     return i;
   }
 
   @Override
   public void close() throws IOException {
-    super.close();
-    this.observer.done(this.totalBytesRead);
+    try {
+      super.close();
+    } finally {
+      this.observer.close();
+    }
   }
+
+  /**
+   * An input stream wrapper that lets you observe bytes of a resource with up-front known size.
+   *
+   * @author bbusjaeger
+   */
+  public static class ObservableResourceInputStream<T> extends ObservableInputStream {
+
+    public ObservableResourceInputStream(InputStream in, ResourceTransferListener<T> observer, T resource, long size) {
+      super(in, observer);
+      observer.start(resource, size);
+    }
+  }
+
 }

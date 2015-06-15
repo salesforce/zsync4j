@@ -2,6 +2,7 @@ package com.salesforce.zsync4j.internal.util;
 
 import static com.google.common.base.Joiner.on;
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.ImmutableList.copyOf;
 import static com.google.common.collect.Iterables.limit;
 import static com.salesforce.zsync4j.internal.util.ZsyncUtil.mkdirs;
 import static java.lang.Math.min;
@@ -9,9 +10,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
-import java.io.BufferedInputStream;
 import java.io.FileNotFoundException;
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -24,6 +23,9 @@ import java.util.Set;
 
 import com.google.common.io.ByteStreams;
 import com.google.common.net.MediaType;
+import com.salesforce.zsync4j.http.ContentRange;
+import com.salesforce.zsync4j.internal.util.ObservableInputStream.ObservableResourceInputStream;
+import com.salesforce.zsync4j.internal.util.TransferListener.ResourceTransferListener;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
@@ -37,124 +39,19 @@ import com.squareup.okhttp.ResponseBody;
  */
 public class HttpClient {
 
-  /**
-   * A listener for monitoring HTTP response body download progress.
-   *
-   * @author bbusjaeger
-   */
-  public static interface ResponseBodyTransferListener {
-
-    /**
-     * Called once after the response header is parsed to inform the listener that the given number
-     * of bytes will be retrieved for the given resource. The resource URI is the result of
-     * following redirects and challenges. The total number of bytes is derived from the
-     * Content-Length header, so it may be -1.
-     *
-     * @param uri Resource from which the entity is being retrieved. May differ from original
-     *        request URI.
-     * @param totalBytes Content-length of response body. May be -1 for chunked responses.
-     */
-    void transferStarted(String uri, long totalBytes);
-
-    /**
-     * Called whenever some number of bytes have been downloaded from the remote resource.
-     *
-     * @param bytes Number of bytes downloaded
-     */
-    void transferProgressed(int bytes);
-
-    /**
-     * Called if an IOException is encountered transferring bytes for the remote resource.
-     *
-     * @param exception the exception thrown by the transfer layer
-     */
-    void transferFailed(IOException exception);
-
-    /**
-     * Called when all bytes for the remote resource have been downloaded.
-     */
-    void transferComplete();
-
-    /**
-     * Called when the transfer is closed. This method may be called without calling
-     * {@link #transferFailed(IOException)} or {@link #transferComplete()}, in which case the
-     * transfer was aborted prematurely. Most likely, because an error occurred processing the
-     * already transferred bytes.
-     */
-    void transferClosed();
+  public static interface HttpTransferListener extends ResourceTransferListener<Response> {
+    void initiating(Request request);
   }
 
-  public static interface PartialResponseBodyTransferListener extends ResponseBodyTransferListener {
-
-    void rangeRequestStarted(Iterable<? extends Range> ranges);
-
-    void rangeRequestComplete(Iterable<? extends Range> ranges);
-
-    void rangeProcessingStarted(Range range);
-
-    void rangeProcessingComplete(Range range);
-
+  public static interface RangeTransferListener {
+    HttpTransferListener newTransfer(List<ContentRange> ranges);
   }
 
   public static interface RangeReceiver {
-    void receive(Range range, InputStream in) throws IOException;
+    void receive(ContentRange range, InputStream in) throws IOException;
   }
 
-  static class ListeningInputStream extends FilterInputStream {
-
-    private final ResponseBodyTransferListener listener;
-
-    public ListeningInputStream(InputStream in, ResponseBodyTransferListener listener, Response response) {
-      super(in);
-      this.listener = listener;
-      this.listener.transferStarted(response.request().urlString(), response.body().contentLength());
-    }
-
-    @Override
-    public int read() throws IOException {
-      final int i;
-      try {
-        i = super.read();
-      } catch (IOException e) {
-        this.listener.transferFailed(e);
-        throw e;
-      }
-      if (i >= 0) {
-        this.listener.transferProgressed(1);
-      } else {
-        this.listener.transferComplete();
-      }
-      return i;
-    }
-
-    @Override
-    public int read(byte[] b, int off, int len) throws IOException {
-      final int i;
-      try {
-        i = super.read(b, off, len);
-      } catch (IOException e) {
-        this.listener.transferFailed(e);
-        throw e;
-      }
-      if (i >= 0) {
-        this.listener.transferProgressed(i);
-      } else {
-        this.listener.transferComplete();
-      }
-      return i;
-    }
-
-    @Override
-    public void close() throws IOException {
-      try {
-        super.close();
-      } finally {
-        this.listener.transferClosed();
-      }
-    }
-  }
-
-  private static final int MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST = 100;
+  private static final int MAXIMUM_RANGES_PER_HTTP_REQUEST = 100;
 
   private final OkHttpClient okHttpClient;
 
@@ -172,7 +69,7 @@ public class HttpClient {
    * @param listener
    * @throws IOException
    */
-  public void get(URI uri, Path output, ResponseBodyTransferListener listener) throws IOException {
+  public void get(URI uri, Path output, HttpTransferListener listener) throws IOException {
     final Path parent = output.getParent();
     final Path tmp = parent.resolve(output.getFileName() + ".part");
     mkdirs(parent);
@@ -192,10 +89,11 @@ public class HttpClient {
    * @return
    * @throws IOException
    */
-  public InputStream get(URI uri, ResponseBodyTransferListener listener) throws IOException {
+  public InputStream get(URI uri, HttpTransferListener listener) throws IOException {
     final Request request = new Request.Builder().url(uri.toString()).build();
-    final Response response = this.okHttpClient.newCall(request).execute();
+    listener.initiating(request);
 
+    final Response response = this.okHttpClient.newCall(request).execute();
     switch (response.code()) {
       case 200:
         break;
@@ -217,22 +115,24 @@ public class HttpClient {
    * @param listener
    * @throws IOException
    */
-  public void partialGet(URI uri, List<Range> ranges, RangeReceiver receiver,
-      PartialResponseBodyTransferListener listener) throws IOException {
-    final Set<Range> remaining = new LinkedHashSet<>(ranges);
+  public void partialGet(URI uri, List<ContentRange> ranges, RangeReceiver receiver, RangeTransferListener listener)
+      throws IOException {
+    final Set<ContentRange> remaining = new LinkedHashSet<>(ranges);
     while (!remaining.isEmpty()) {
-      final Iterable<Range> next = limit(remaining, min(remaining.size(), MAXIMUM_RANGE_REQUESTS_PER_HTTP_REQUEST));
-      listener.rangeRequestStarted(next);
+      final List<ContentRange> next = copyOf(limit(remaining, min(remaining.size(), MAXIMUM_RANGES_PER_HTTP_REQUEST)));
+      final HttpTransferListener requestListener = listener.newTransfer(next);
 
       final Request request =
           new Request.Builder().addHeader("Range", "bytes=" + on(',').join(next)).url(uri.toString()).build();
-      final Response response = this.okHttpClient.newCall(request).execute();
+      requestListener.initiating(request);
 
+      final Response response = this.okHttpClient.newCall(request).execute();
       switch (response.code()) {
         case 206:
           break;
         case 200:
-          receiver.receive(new Range(0, response.body().contentLength()), inputStream(response, listener));
+          receiver
+              .receive(new ContentRange(0, response.body().contentLength()), inputStream(response, requestListener));
           return;
         case 404:
           throw new FileNotFoundException(uri.toString());
@@ -241,67 +141,66 @@ public class HttpClient {
               + response.code());
       }
 
-      final String contentType = response.header("Content-Type");
-      if (contentType == null) {
-        throw new RuntimeException("Missing Content-Type header");
-      }
-      final MediaType mediaType = MediaType.parse(contentType);
+      final MediaType mediaType = parseMediaType(response);
       if ("multipart".equals(mediaType.type())) {
         final byte[] boundary = getBoundary(mediaType);
-        this.handleMultiPartBody(response, receiver, remaining, listener, boundary);
+        this.handleMultiPartBody(response, receiver, remaining, requestListener, boundary);
       } else {
-        this.handleSinglePartBody(response, receiver, remaining, listener);
+        this.handleSinglePartBody(response, receiver, remaining, requestListener);
       }
-
-      listener.rangeRequestComplete(ranges);
     }
   }
 
-  void handleSinglePartBody(Response response, RangeReceiver receiver, final Set<Range> remaining,
-      PartialResponseBodyTransferListener listener) throws IOException {
+  MediaType parseMediaType(final Response response) {
+    final String contentType = response.header("Content-Type");
+    if (contentType == null) {
+      throw new RuntimeException("Missing Content-Type header");
+    }
+    final MediaType mediaType = MediaType.parse(contentType);
+    return mediaType;
+  }
+
+  void handleSinglePartBody(Response response, RangeReceiver receiver, final Set<ContentRange> remaining,
+      HttpTransferListener listener) throws IOException {
     final String contentRange = response.header("Content-Range");
     if (contentRange == null) {
       throw new IOException("Content-Range header missing");
     }
 
-    final Range range = parseContentRange(contentRange);
+    final ContentRange range = parseContentRange(contentRange);
     if (!remaining.remove(range)) {
       throw new IOException("Received range " + range + " not one of requested " + remaining);
     }
 
     InputStream in = inputStream(response, listener);
-    listener.rangeProcessingStarted(range);
     receiver.receive(range, in);
-    listener.rangeProcessingComplete(range);
   }
 
-  void handleMultiPartBody(Response response, RangeReceiver receiver, final Set<Range> remaining,
-      PartialResponseBodyTransferListener listener, byte[] boundary) {
-    try (InputStream in = inputStream(response, listener); InputStream buffered = new BufferedInputStream(in)) {
-      Range range;
-      while ((range = this.nextPart(buffered, boundary)) != null) {
+  void handleMultiPartBody(Response response, RangeReceiver receiver, final Set<ContentRange> remaining,
+      HttpTransferListener listener, byte[] boundary) {
+    try (InputStream in = inputStream(response, listener)) {
+      ContentRange range;
+      while ((range = this.nextPart(in, boundary)) != null) {
         // technically it's OK for server to combine or re-order ranges. However, since we
         // already combine and sort ranges, this should not happen
         if (!remaining.remove(range)) {
           throw new RuntimeException("Received range " + range + " not one of requested " + remaining);
         }
-        final InputStream part = ByteStreams.limit(buffered, range.size());
-        listener.rangeProcessingStarted(range);
+        final InputStream part = ByteStreams.limit(in, range.size());
         receiver.receive(range, part);
-        listener.rangeProcessingComplete(range);
       }
     } catch (IOException e) {
       throw new RuntimeException("Failed to read response", e);
     }
   }
 
-  private static InputStream inputStream(Response response, ResponseBodyTransferListener listener) {
+  private static InputStream inputStream(Response response, ResourceTransferListener<Response> listener) {
     final ResponseBody body = response.body();
     final InputStream in = body.byteStream();
-    return new ListeningInputStream(in, listener, response);
+    return new ObservableResourceInputStream<>(in, listener, response, response.body().contentLength());
   }
 
-  private Range nextPart(InputStream in, byte[] boundary) throws IOException {
+  private ContentRange nextPart(InputStream in, byte[] boundary) throws IOException {
     int c = in.read();
     if (c == '\r') {
       if (!(in.read() == '\n' && in.read() == '-' && in.read() == '-')) {
@@ -331,7 +230,7 @@ public class HttpClient {
       throw new RuntimeException("Missing control line feed");
     }
 
-    Range range = null;
+    ContentRange range = null;
     String header;
     while ((header = readHeader(in)) != null) {
       if (header.startsWith("Content-Range")) {
@@ -378,7 +277,7 @@ public class HttpClient {
     return boundary;
   }
 
-  static Range parseContentRange(String value) {
+  static ContentRange parseContentRange(String value) {
     final String prefix = "bytes ";
     if (!value.startsWith(prefix)) {
       throw new IllegalArgumentException("Invalid Content-Range value " + value);
@@ -393,7 +292,7 @@ public class HttpClient {
       throw new IllegalArgumentException("Invalid Content-Range value " + value);
     }
     final long last = Long.parseLong(value.substring(idx + 1, dash));
-    final Range range = new Range(first, last);
+    final ContentRange range = new ContentRange(first, last);
     final long size = Long.parseLong(value.substring(dash + 1));
     if (size != range.size()) {
       // TODO - Need to review this next line
