@@ -1,7 +1,7 @@
 /**
  * Copyright © 2015 salesforce.com, inc. All rights reserved.
  */
-package com.salesforce.zsync4j.internal;
+package com.salesforce.zsync4j;
 
 import static com.google.common.collect.ImmutableList.copyOf;
 
@@ -12,7 +12,7 @@ import java.util.List;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.salesforce.zsync4j.Zsync.Options;
-import com.salesforce.zsync4j.ZsyncObserver;
+import com.salesforce.zsync4j.http.ContentRange;
 
 
 /**
@@ -35,24 +35,16 @@ public class ForwardingZsyncObserver extends ZsyncObserver {
   }
 
   @Override
-  public void bytesDownloaded(long bytes) {
-    for (ZsyncObserver observer : this.observers) {
-      observer.bytesDownloaded(bytes);
-    }
-  }
-
-  public void addObserver(ZsyncObserver observer) {
-    this.observers.add(observer);
-  }
-
-  public void removeObserver(ZsyncObserver observer) {
-    this.observers.remove(observer);
-  }
-
-  @Override
   public void zsyncStarted(URI requestedZsyncUri, Options options) {
     for (ZsyncObserver observer : this.observers) {
       observer.zsyncStarted(requestedZsyncUri, options);
+    }
+  }
+
+  @Override
+  public void controlFileDownloadingInitiated(URI uri) {
+    for (ZsyncObserver observer : this.observers) {
+      observer.controlFileDownloadingInitiated(uri);
     }
   }
 
@@ -99,9 +91,23 @@ public class ForwardingZsyncObserver extends ZsyncObserver {
   }
 
   @Override
+  public void remoteFileDownloadingInitiated(URI uri, List<ContentRange> ranges) {
+    for (ZsyncObserver observer : this.observers) {
+      observer.remoteFileDownloadingInitiated(uri, ranges);
+    }
+  }
+
+  @Override
   public void remoteFileDownloadingStarted(URI uri, long length) {
     for (ZsyncObserver observer : this.observers) {
       observer.remoteFileDownloadingStarted(uri, length);
+    }
+  }
+
+  @Override
+  public void remoteFileRangeReceived(ContentRange range) {
+    for (ZsyncObserver observer : this.observers) {
+      observer.remoteFileRangeReceived(range);
     }
   }
 
@@ -113,9 +119,37 @@ public class ForwardingZsyncObserver extends ZsyncObserver {
   }
 
   @Override
+  public void outputFileWritingStarted(Path outputFile, long length) {
+    for (ZsyncObserver observer : this.observers) {
+      observer.outputFileWritingStarted(outputFile, length);
+    }
+  }
+
+  @Override
+  public void outputFileWritingCompleted() {
+    for (ZsyncObserver observer : this.observers) {
+      observer.outputFileWritingCompleted();
+    }
+  }
+
+  @Override
+  public void bytesRead(long bytes) {
+    for (ZsyncObserver observer : this.observers) {
+      observer.bytesRead(bytes);
+    }
+  }
+
+  @Override
   public void bytesWritten(long bytes) {
     for (ZsyncObserver observer : this.observers) {
       observer.bytesWritten(bytes);
+    }
+  }
+
+  @Override
+  public void bytesDownloaded(long bytes) {
+    for (ZsyncObserver observer : this.observers) {
+      observer.bytesDownloaded(bytes);
     }
   }
 
