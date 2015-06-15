@@ -3,7 +3,7 @@
 
   <groupId>com.salesforce</groupId>
   <artifactId>zsync4j</artifactId>
-  <version>0.0.8</version>
+  <version>0.0.9-SNAPSHOT</version>
   <packaging>takari-jar</packaging>
 
   <properties>
@@ -14,7 +14,7 @@
     <connection>scm:git:git@git.soma.salesforce.com:modularization-team/zsync4j.git</connection>
     <developerConnection>scm:git:git@git.soma.salesforce.com:modularization-team/zsync4j.git</developerConnection>
     <url>https://git.soma.salesforce.com/modularization-team/zsync4j</url>
-    <tag>zsync4j-0.0.8</tag>
+    <tag>HEAD</tag>
   </scm>
 
   <distributionManagement>
