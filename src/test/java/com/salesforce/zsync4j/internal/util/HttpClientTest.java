@@ -118,7 +118,7 @@ public class HttpClientTest {
   }
 
   private Response fakeResponse(int code) {
-    Request fakeRequest = new Request.Builder().url("url").build();
+    Request fakeRequest = new Request.Builder().url("http://host/url").build();
     return new Response.Builder().protocol(Protocol.HTTP_2).request(fakeRequest).code(code).build();
   }
 
@@ -210,18 +210,18 @@ public class HttpClientTest {
         assertEquals("GET", request.method());
         assertEquals(credentials.get(uri.getHost()).basic(), request.header("Authorization"));
 
-        ResponseBody body = mock(ResponseBody.class);
-        when(body.source()).thenReturn(mock(BufferedSource.class));
-        when(body.byteStream()).thenReturn(mock(InputStream.class));
-        final Response response =
-            new Response.Builder().code(HTTP_OK).body(body).request(request).protocol(HTTP_1_1).build();
-        final Call call = mock(Call.class);
         try {
+          ResponseBody body = mock(ResponseBody.class);
+          when(body.source()).thenReturn(mock(BufferedSource.class));
+          when(body.byteStream()).thenReturn(mock(InputStream.class));
+          final Response response =
+              new Response.Builder().code(HTTP_OK).body(body).request(request).protocol(HTTP_1_1).build();
+          final Call call = mock(Call.class);
           when(call.execute()).thenReturn(response);
+          return call;
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
-        return call;
       }
     };
   }

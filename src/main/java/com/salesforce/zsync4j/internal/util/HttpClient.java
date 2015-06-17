@@ -11,6 +11,7 @@ import static java.net.HttpURLConnection.HTTP_UNAUTHORIZED;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static java.util.Collections.newSetFromMap;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -25,8 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.eclipse.jetty.util.ConcurrentHashSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.common.io.ByteStreams;
 import com.google.common.net.MediaType;
@@ -77,8 +77,10 @@ public class HttpClient {
 
   HttpClient(OkHttpClient okHttpClient) {
     checkArgument(okHttpClient != null, "httpClient cannot be null");
+    this.okHttpClient = okHttpClient;
+    this.basicChallengeReceived = newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     // setting authenticator to null, so it does not delegate to java Authenticator
-    this.okHttpClient = okHttpClient.setAuthenticator(new Authenticator() {
+    this.okHttpClient.setAuthenticator(new Authenticator() {
       @Override
       public Request authenticateProxy(Proxy proxy, Response response) throws IOException {
         return null;
@@ -89,7 +91,6 @@ public class HttpClient {
         return null;
       }
     });
-    this.basicChallengeReceived = new ConcurrentHashSet<>();
   }
 
   /**
@@ -266,7 +267,8 @@ public class HttpClient {
     }
   }
 
-  private static InputStream inputStream(Response response, ResourceTransferListener<Response> listener) {
+  private static InputStream inputStream(Response response, ResourceTransferListener<Response> listener)
+      throws IOException {
     final ResponseBody body = response.body();
     final InputStream in = body.byteStream();
     return new ObservableResourceInputStream<>(in, listener, response, response.body().contentLength());
