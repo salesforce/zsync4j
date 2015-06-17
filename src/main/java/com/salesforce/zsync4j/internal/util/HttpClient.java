@@ -6,6 +6,8 @@ import static com.google.common.collect.ImmutableList.copyOf;
 import static com.google.common.collect.Iterables.limit;
 import static com.salesforce.zsync4j.internal.util.ZsyncUtil.mkdirs;
 import static java.lang.Math.min;
+import static java.net.HttpURLConnection.HTTP_PROXY_AUTH;
+import static java.net.HttpURLConnection.HTTP_UNAUTHORIZED;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
@@ -13,21 +15,30 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.Proxy;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+
+import org.eclipse.jetty.util.ConcurrentHashSet;
 
 import com.google.common.io.ByteStreams;
 import com.google.common.net.MediaType;
 import com.salesforce.zsync4j.http.ContentRange;
+import com.salesforce.zsync4j.http.Credentials;
 import com.salesforce.zsync4j.internal.util.ObservableInputStream.ObservableResourceInputStream;
 import com.salesforce.zsync4j.internal.util.TransferListener.ResourceTransferListener;
+import com.squareup.okhttp.Authenticator;
+import com.squareup.okhttp.Challenge;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Request.Builder;
 import com.squareup.okhttp.Response;
 import com.squareup.okhttp.ResponseBody;
 
@@ -38,6 +49,14 @@ import com.squareup.okhttp.ResponseBody;
  * @author bbusjaeger
  */
 public class HttpClient {
+
+  public static HttpClient newHttpClient() {
+    return new HttpClient(new OkHttpClient());
+  }
+
+  public static HttpClient newHttpClient(OkHttpClient okHttpClient) {
+    return new HttpClient(okHttpClient.clone());
+  }
 
   public static interface HttpTransferListener extends ResourceTransferListener<Response> {
     void initiating(Request request);
@@ -54,10 +73,23 @@ public class HttpClient {
   private static final int MAXIMUM_RANGES_PER_HTTP_REQUEST = 100;
 
   private final OkHttpClient okHttpClient;
+  private final Set<String> basicChallengeReceived;
 
-  public HttpClient(OkHttpClient okHttpClient) {
+  HttpClient(OkHttpClient okHttpClient) {
     checkArgument(okHttpClient != null, "httpClient cannot be null");
-    this.okHttpClient = okHttpClient;
+    // setting authenticator to null, so it does not delegate to java Authenticator
+    this.okHttpClient = okHttpClient.setAuthenticator(new Authenticator() {
+      @Override
+      public Request authenticateProxy(Proxy proxy, Response response) throws IOException {
+        return null;
+      }
+
+      @Override
+      public Request authenticate(Proxy proxy, Response response) throws IOException {
+        return null;
+      }
+    });
+    this.basicChallengeReceived = new ConcurrentHashSet<>();
   }
 
   /**
@@ -69,12 +101,13 @@ public class HttpClient {
    * @param listener
    * @throws IOException
    */
-  public void get(URI uri, Path output, HttpTransferListener listener) throws IOException {
+  public void get(URI uri, Path output, Map<String, ? extends Credentials> credentials, HttpTransferListener listener)
+      throws IOException {
     final Path parent = output.getParent();
     final Path tmp = parent.resolve(output.getFileName() + ".part");
     mkdirs(parent);
     // TODO conditional request and resume
-    try (InputStream in = this.get(uri, listener)) {
+    try (InputStream in = this.get(uri, credentials, listener)) {
       Files.copy(in, tmp, REPLACE_EXISTING);
     }
     Files.move(tmp, output, REPLACE_EXISTING, ATOMIC_MOVE);
@@ -89,11 +122,9 @@ public class HttpClient {
    * @return
    * @throws IOException
    */
-  public InputStream get(URI uri, HttpTransferListener listener) throws IOException {
-    final Request request = new Request.Builder().url(uri.toString()).build();
-    listener.initiating(request);
-
-    final Response response = this.okHttpClient.newCall(request).execute();
+  public InputStream get(URI uri, Map<String, ? extends Credentials> credentials, HttpTransferListener listener)
+      throws IOException {
+    final Response response = execute(uri, credentials, listener, Collections.<ContentRange>emptyList());
     switch (response.code()) {
       case 200:
         break;
@@ -102,7 +133,6 @@ public class HttpClient {
       default:
         throw new IOException("Http request for resource " + uri + " returned unexpected http code: " + response.code());
     }
-
     return inputStream(response, listener);
   }
 
@@ -115,18 +145,13 @@ public class HttpClient {
    * @param listener
    * @throws IOException
    */
-  public void partialGet(URI uri, List<ContentRange> ranges, RangeReceiver receiver, RangeTransferListener listener)
-      throws IOException {
+  public void partialGet(URI uri, List<ContentRange> ranges, Map<String, ? extends Credentials> credentials,
+      RangeReceiver receiver, RangeTransferListener listener) throws IOException {
     final Set<ContentRange> remaining = new LinkedHashSet<>(ranges);
     while (!remaining.isEmpty()) {
       final List<ContentRange> next = copyOf(limit(remaining, min(remaining.size(), MAXIMUM_RANGES_PER_HTTP_REQUEST)));
       final HttpTransferListener requestListener = listener.newTransfer(next);
-
-      final Request request =
-          new Request.Builder().addHeader("Range", "bytes=" + on(',').join(next)).url(uri.toString()).build();
-      requestListener.initiating(request);
-
-      final Response response = this.okHttpClient.newCall(request).execute();
+      final Response response = execute(uri, credentials, requestListener, next);
       switch (response.code()) {
         case 206:
           break;
@@ -140,7 +165,6 @@ public class HttpClient {
           throw new IOException("Http request for resource " + uri + " returned unexpected http code: "
               + response.code());
       }
-
       final MediaType mediaType = parseMediaType(response);
       if ("multipart".equals(mediaType.type())) {
         final byte[] boundary = getBoundary(mediaType);
@@ -149,6 +173,54 @@ public class HttpClient {
         this.handleSinglePartBody(response, receiver, remaining, requestListener);
       }
     }
+  }
+
+  Response execute(URI uri, Map<String, ? extends Credentials> credentials, HttpTransferListener listener,
+      List<ContentRange> ranges) throws IOException {
+    Request request = buildRequest(uri, credentials, ranges);
+    listener.initiating(request);
+    Response response = this.okHttpClient.newCall(request).execute();
+    for (int i = 0; i < 10; i++) {
+      final int code = response.code();
+      if (!((code == HTTP_UNAUTHORIZED || code == HTTP_PROXY_AUTH) && containsBasic(response.challenges()))) {
+        break;
+      }
+      // if we are receiving a basic authorization challenges, set header and retry
+      final String host = response.request().uri().getHost();
+      this.basicChallengeReceived.add(host);
+      final Credentials creds = credentials.get(host);
+      if (creds == null) {
+        break;
+      }
+      final String name = code == HTTP_UNAUTHORIZED ? "Authorization" : "Proxy-Authorization";
+      request = response.request().newBuilder().header(name, creds.basic()).build();
+      response = this.okHttpClient.newCall(request).execute();
+    }
+    return response;
+  }
+
+  Request buildRequest(URI uri, Map<String, ? extends Credentials> credentials, List<ContentRange> ranges) {
+    final Builder builder = new Request.Builder();
+    builder.url(uri.toString());
+    if (this.basicChallengeReceived.contains(uri.getHost()) && "https".equals(uri.getScheme())) {
+      final Credentials creds = credentials.get(uri.getHost());
+      if (creds != null) {
+        builder.header("Authorization", creds.basic());
+      }
+    }
+    if (!ranges.isEmpty()) {
+      builder.addHeader("Range", "bytes=" + on(',').join(ranges));
+    }
+    return builder.build();
+  }
+
+  private boolean containsBasic(Iterable<? extends Challenge> challenges) {
+    for (Challenge challenge : challenges) {
+      if ("Basic".equalsIgnoreCase(challenge.getScheme())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   MediaType parseMediaType(final Response response) {

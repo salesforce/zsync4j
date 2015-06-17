@@ -19,6 +19,53 @@ class EventLogTransferListener implements HttpTransferListener {
     int hashCode();
   }
 
+  static class Initialized implements EventLogTransferListener.Event {
+    private final Request request;
+
+    public Initialized(Request request) {
+      super();
+      this.request = request;
+    }
+
+    @Override
+    public int hashCode() {
+      final int prime = 31;
+      int result = 1;
+      result = prime * result + ((this.request == null) ? 0 : this.request.hashCode());
+      return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (obj == null) {
+        return false;
+      }
+      if (getClass() != obj.getClass()) {
+        return false;
+      }
+      Initialized other = (Initialized) obj;
+      return equals(this.request, other.request);
+    }
+
+    private boolean equals(Request r1, Request r2) {
+      if (r1 == null && r2 == null) {
+        return true;
+      }
+      if (r1 == null || r2 == null) {
+        return false;
+      }
+      try {
+        return r1.urlString().equals(r2.urlString()) && r1.uri().equals(r2.uri()) && r1.url().equals(r2.url())
+            && r1.method().equals(r2.method()) && r1.headers().names().equals(r2.headers().names());
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
   static class Started implements EventLogTransferListener.Event {
     private final URI uri;
     private final long totalBytes;
@@ -120,8 +167,7 @@ class EventLogTransferListener implements HttpTransferListener {
 
   @Override
   public void initiating(Request request) {
-    // TODO Auto-generated method stub
-    
+    this.eventLog.add(new Initialized(request));
   }
 
   @Override

@@ -1,9 +1,10 @@
 package com.salesforce.zsync4j;
 
+import static com.salesforce.zsync4j.internal.util.HttpClient.newHttpClient;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.Proxy;
 import java.net.URI;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
@@ -17,8 +18,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.salesforce.zsync4j.Zsync.Options.Credentials;
 import com.salesforce.zsync4j.ZsyncStatsObserver.ZsyncStats;
+import com.salesforce.zsync4j.http.Credentials;
 import com.salesforce.zsync4j.internal.BlockMatcher;
 import com.salesforce.zsync4j.internal.ChecksumValidationIOException;
 import com.salesforce.zsync4j.internal.ControlFile;
@@ -33,10 +34,7 @@ import com.salesforce.zsync4j.internal.util.RollingBuffer;
 import com.salesforce.zsync4j.internal.util.TransferListener.ResourceTransferListener;
 import com.salesforce.zsync4j.internal.util.ZeroPaddedReadableByteChannel;
 import com.salesforce.zsync4j.internal.util.ZsyncUtil;
-import com.squareup.okhttp.Authenticator;
 import com.squareup.okhttp.OkHttpClient;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.Response;
 
 /**
  * Zsync download client: reduces the number of bytes retrieved from a remote server by drawing
@@ -58,39 +56,6 @@ public class Zsync {
    *
    */
   public static class Options {
-
-    /**
-     * Credentials used to authenticate with remote hosts
-     *
-     * @author bbusjaeger
-     */
-    public static class Credentials {
-      private final String username;
-      private final String password;
-
-      public Credentials(String username, String password) {
-        this.username = username;
-        this.password = password;
-      }
-
-      /**
-       * User name for remote authentication
-       *
-       * @return
-       */
-      public String getUsername() {
-        return this.username;
-      }
-
-      /**
-       * Password for remote authentication
-       *
-       * @return
-       */
-      public String getPassword() {
-        return this.password;
-      }
-    }
 
     private List<Path> inputFiles = new ArrayList<>(2);
     private Path outputFile;
@@ -201,7 +166,18 @@ public class Zsync {
     }
 
     /**
-     * Registers the given credentials for the given hostname.
+     * Registers the given credentials for the given host name. A {@link Zsync} instance applies the
+     * credentials as follows:
+     * <ol>
+     * <li>The first request issued to a given host is sent without any form of authentication
+     * information to give the server the opportunity to challenge the request.</li>
+     * <li>If a 401 Basic authentication challenge is received and credentials for the given host
+     * are specified in the options, the request is retried with a basic Authorization header.</li>
+     * <li>Subsequent https requests to the same host are sent with a basic Authorization header in
+     * the first request. This challenge caching is per host an does not take realms received as
+     * part of challenge responses into account. Challenge caching is disabled for http requests to
+     * give the server an opportunity to redirect to https.</li>
+     * </ol>
      *
      * @param hostname
      * @param credentials
@@ -225,14 +201,18 @@ public class Zsync {
 
   public static final String VERSION = "0.6.2";
 
-  private final OkHttpClient okHttpClient;
+  private final HttpClient httpClient;
 
   public Zsync() {
-    this(new OkHttpClient());
+    this(newHttpClient());
   }
 
   public Zsync(OkHttpClient okHttpClient) {
-    this.okHttpClient = okHttpClient;
+    this(newHttpClient(okHttpClient));
+  }
+
+  private Zsync(HttpClient httpClient) {
+    this.httpClient = httpClient;
   }
 
   public Path zsync(URI zsyncFile, Options options) throws ZsyncException {
@@ -272,11 +252,8 @@ public class Zsync {
    * @throws ZsyncChecksumValidationFailedException
    */
   private Path zsyncInternal(URI zsyncFile, Options options, EventDispatcher events) throws ZsyncException, IOException {
-
-    final HttpClient httpClient = this.createHttpClient(options.getCredentials());
-
     final ControlFile controlFile;
-    try (InputStream in = this.openZsyncFile(zsyncFile, httpClient, options, events)) {
+    try (InputStream in = this.openZsyncFile(zsyncFile, this.httpClient, options, events)) {
       controlFile = ControlFile.read(in);
     } catch (FileNotFoundException e) {
       throw new ZsyncControlFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
@@ -298,7 +275,7 @@ public class Zsync {
 
     try (final OutputFile targetFile = new OutputFile(outputFile, controlFile, events.getOutputFileWriteListener())) {
       if (!this.processInputFiles(targetFile, controlFile, options.getInputFiles(), events)) {
-        httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(),
+        this.httpClient.partialGet(remoteFileUri, targetFile.getMissingRanges(), options.getCredentials(),
             events.getRangeReceiverListener(targetFile), events.getRemoteFileDownloadListener());
       }
     } catch (ChecksumValidationIOException exception) {
@@ -336,12 +313,13 @@ public class Zsync {
         // TODO we may want to set the redirect URL resulting from processing the http request
         options.setZsyncFileSource(zsyncFile);
         final HttpTransferListener listener = events.getControlFileDownloadListener();
+        final Map<String, Credentials> credentials = options.getCredentials();
         // check if we should persist the file locally
         final Path savePath = options.getSaveZsyncFile();
         if (savePath == null) {
-          in = httpClient.get(zsyncFile, listener);
+          in = httpClient.get(zsyncFile, credentials, listener);
         } else {
-          httpClient.get(zsyncFile, savePath, listener);
+          httpClient.get(zsyncFile, savePath, credentials, listener);
           in = openZsyncFile(savePath, events);
         }
       } else {
@@ -359,34 +337,6 @@ public class Zsync {
 
   private InputStream openZsyncFile(Path zsyncFile, EventDispatcher events) throws IOException {
     return new ObservableInputStream(Files.newInputStream(zsyncFile), events.getControlFileReadListener());
-  }
-
-  /**
-   * Creates an HTTP client configured with the given credentials map. Uses a shallow copy of the
-   * OkHttpClient to not modify the original copy per <a
-   * href="https://github.com/square/okhttp/wiki/Recipes#per-call-configuration">Per-call
-   * Configuration</a>
-   *
-   * @param credentials
-   * @return
-   */
-  HttpClient createHttpClient(final Map<String, Credentials> credentials) {
-    final OkHttpClient clone = this.okHttpClient.clone();
-    clone.setAuthenticator(new Authenticator() {
-      @Override
-      public Request authenticateProxy(Proxy proxy, Response response) throws IOException {
-        return this.authenticate(proxy, response);
-      }
-
-      @Override
-      public Request authenticate(Proxy proxy, Response response) throws IOException {
-        final Credentials creds = credentials.get(response.request().uri().getHost());
-        return creds == null ? null : response.request().newBuilder()
-            .header("Authorization", com.squareup.okhttp.Credentials.basic(creds.getUsername(), creds.getPassword()))
-            .build();
-      }
-    });
-    return new HttpClient(clone);
   }
 
   private boolean processInputFiles(OutputFile targetFile, ControlFile controlFile,
