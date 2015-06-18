@@ -4,7 +4,6 @@ import static com.google.common.base.Joiner.on;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.copyOf;
 import static com.google.common.collect.Iterables.limit;
-import static com.salesforce.zsync4j.internal.util.ZsyncUtil.mkdirs;
 import static java.lang.Math.min;
 import static java.net.HttpURLConnection.HTTP_PROXY_AUTH;
 import static java.net.HttpURLConnection.HTTP_UNAUTHORIZED;
@@ -106,7 +105,7 @@ public class HttpClient {
       throws IOException {
     final Path parent = output.getParent();
     final Path tmp = parent.resolve(output.getFileName() + ".part");
-    mkdirs(parent);
+    Files.createDirectories(parent);
     // TODO conditional request and resume
     try (InputStream in = this.get(uri, credentials, listener)) {
       Files.copy(in, tmp, REPLACE_EXISTING);

@@ -1,6 +1,5 @@
 package com.salesforce.zsync4j.internal;
 
-import static com.salesforce.zsync4j.internal.util.ZsyncUtil.mkdirs;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.READ;
@@ -63,7 +62,7 @@ public class OutputFile implements RangeReceiver, Closeable {
     final String tmpName = path.getFileName().toString() + ".part";
     final Path parent = path.getParent();
     if (parent != null) {
-      mkdirs(parent);
+      Files.createDirectories(parent);
       this.tempPath = parent.resolve(tmpName);
     } else {
       this.tempPath = Paths.get(tmpName);

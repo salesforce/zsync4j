@@ -1,6 +1,5 @@
 package com.salesforce.zsync4j;
 
-import static com.salesforce.zsync4j.internal.util.ZsyncUtil.getFileSize;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import java.io.FileOutputStream;
@@ -173,7 +172,12 @@ public class ZsyncMake {
     options = new Options(options).calculateMissingValues(inputFile);
 
     final int blockSize = options.getBlockSize();
-    final long fileLength = getFileSize(inputFile);
+    final long fileLength;
+    try {
+      fileLength = Files.size(inputFile);
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Unable to determine size of input file: " + e.getMessage(), e);
+    }
     final int sequenceMatches = fileLength > options.getBlockSize() ? 2 : 1;
     final int weakChecksumLength = weakChecksumLength(fileLength, blockSize, sequenceMatches);
     final int strongChecksumLength = strongChecksumLength(fileLength, blockSize, sequenceMatches);
@@ -268,8 +272,9 @@ public class ZsyncMake {
         int read;
         while ((read = in.read(block)) != -1) {
           // pad last block with 0s
-          if (read < blockSize)
+          if (read < blockSize) {
             Arrays.fill(block, read, blockSize, (byte) 0);
+          }
 
           // write trailing bytes of weak checksum
           weakBytes.clear();

@@ -36,29 +36,4 @@ public interface TransferListener extends Closeable {
 
   }
 
-  /**
-   * Keeps track of how many bytes have been transferred in total.
-   *
-   * @author bbusjaeger
-   */
-  public static abstract class TrackingTransferObserver implements TransferListener {
-
-    private long totalBytesTransferred = 0;
-
-    @Override
-    public void transferred(long bytesTransferred) {
-      transferred(bytesTransferred, totalBytesTransferred += bytesTransferred);
-    }
-
-    @Override
-    public void close() {
-      close(totalBytesTransferred);
-    }
-
-    public abstract void transferred(long bytes, long totalBytes);
-
-    public abstract void close(long totalBytes);
-
-  }
-
 }

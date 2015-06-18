@@ -6,11 +6,13 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
@@ -160,6 +162,55 @@ public class RollingBufferTest {
   }
 
   /**
+   * Tests that the buffer position is reset properly even if a write fails
+   * 
+   * @throws IOException
+   */
+  @Test
+  public void writeFailure() throws IOException {
+    final byte[] data = new byte[] {0, 1, 2, 3, 4, 5, 6, 7};
+    final ReadableByteChannel c = newChannel(new ByteArrayInputStream(data));
+    final RollingBuffer b = new RollingBuffer(c, 2, 4);
+    assertEquals(0, b.get(0));
+    final String message = "test";
+    try {
+      b.write(new AbstractWritableByteChannel() {
+        @Override
+        public int write(ByteBuffer src) throws IOException {
+          src.get(); // advance buffer by one to simulate writing
+          throw new IOException(message);
+        }
+      });
+      fail("Exception not re-thrown");
+    } catch (IOException e) {
+      assertEquals(message, e.getMessage());
+    }
+    // finally asser that buffer was reset
+    assertEquals(0, b.get(0));
+  }
+
+  /**
+   * Asserts that a channel that writes one byte at a time still receives the entire buffer
+   */
+  @Test
+  public void writeWhileRemaining() throws IOException {
+    final byte[] data = new byte[] {0, 1, 2, 3, 4, 5, 6, 7};
+    final ReadableByteChannel c = newChannel(new ByteArrayInputStream(data));
+    final RollingBuffer b = new RollingBuffer(c, 2, 4);
+    final byte[] written = new byte[2];
+    b.write(new AbstractWritableByteChannel() {
+      int i = 0;
+
+      @Override
+      public int write(ByteBuffer src) throws IOException {
+        written[this.i++] = src.get();
+        return 1;
+      }
+    });
+    assertArrayEquals(new byte[] {0, 1}, written);
+  }
+
+  /**
    * Tests that the buffer returns the window size as its length
    */
   @Test
@@ -219,5 +270,17 @@ public class RollingBufferTest {
     final WritableByteChannel o = Channels.newChannel(bos);
     b.write(o);
     return bos.toByteArray();
+  }
+
+  abstract static class AbstractWritableByteChannel implements WritableByteChannel {
+
+    @Override
+    public boolean isOpen() {
+      return true;
+    }
+
+    @Override
+    public void close() throws IOException {}
+
   }
 }

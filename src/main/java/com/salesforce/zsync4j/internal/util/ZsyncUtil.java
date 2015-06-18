@@ -5,7 +5,6 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.FileSystemNotFoundException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
@@ -55,7 +54,7 @@ public class ZsyncUtil {
     return (((long) x) << 32) | (y & 0xffffffffL);
   }
 
-  private static short unsigned(byte b) {
+  public static short unsigned(byte b) {
     return (short) (b < 0 ? b & 0xFF : b);
   }
 
@@ -83,27 +82,6 @@ public class ZsyncUtil {
       return MessageDigest.getInstance("SHA-1");
     } catch (NoSuchAlgorithmException e) {
       throw new RuntimeException("SHA-1");
-    }
-  }
-
-  public static void mkdirs(Path path) {
-    if (!Files.isDirectory(path.getParent()))
-      try {
-        Files.createDirectories(path.getParent());
-      } catch (IOException e) {
-        // ignore
-      }
-  }
-
-  /**
-   * Basically just wraps {@link Files#size(Path)} with some argument validation and exception
-   * handling. IOExceptions will be turned into runtime exceptions.
-   */
-  public static long getFileSize(Path file) {
-    try {
-      return Files.size(file);
-    } catch (IOException exception) {
-      throw new RuntimeException("Failed to get file size for file: " + file.getFileName(), exception);
     }
   }
 
