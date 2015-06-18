@@ -31,7 +31,7 @@ import com.salesforce.zsync4j.http.Credentials;
 import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Closed;
 import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Event;
 import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Initialized;
-import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Progressed;
+import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Transferred;
 import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Started;
 import com.salesforce.zsync4j.internal.util.HttpClient.HttpTransferListener;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
@@ -153,7 +153,7 @@ public class HttpClientTest {
 
     final List<Event> events =
         ImmutableList.of(new Initialized(new Request.Builder().url(uri.toString()).build()), new Started(uri,
-            data.length), new Progressed(1), new Progressed(8), new Progressed(8), Closed.INSTANCE);
+            data.length), new Transferred(1), new Transferred(8), new Transferred(8), Closed.INSTANCE);
     assertEquals(events, listener.getEventLog());
   }
 

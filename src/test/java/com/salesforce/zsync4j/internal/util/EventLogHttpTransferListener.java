@@ -117,10 +117,10 @@ class EventLogHttpTransferListener implements HttpTransferListener {
 
   }
 
-  static class Progressed implements EventLogHttpTransferListener.Event {
+  static class Transferred implements EventLogHttpTransferListener.Event {
     private final long bytes;
 
-    public Progressed(long bytes) {
+    public Transferred(long bytes) {
       super();
       this.bytes = bytes;
     }
@@ -144,7 +144,7 @@ class EventLogHttpTransferListener implements HttpTransferListener {
       if (getClass() != obj.getClass()) {
         return false;
       }
-      Progressed other = (Progressed) obj;
+      Transferred other = (Transferred) obj;
       if (this.bytes != other.bytes) {
         return false;
       }
@@ -187,7 +187,7 @@ class EventLogHttpTransferListener implements HttpTransferListener {
 
   @Override
   public void transferred(long bytes) {
-    this.eventLog.add(new Progressed(bytes));
+    this.eventLog.add(new Transferred(bytes));
   }
 
   @Override
