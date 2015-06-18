@@ -9,7 +9,13 @@ import com.salesforce.zsync4j.internal.util.HttpClient.HttpTransferListener;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 
-class EventLogTransferListener implements HttpTransferListener {
+/**
+ * A test utility class for recording listener events so that tests can assert the sequence of
+ * events received after invoking a method that takes a listener parameter.
+ *
+ * @author bbusjaeger
+ */
+class EventLogHttpTransferListener implements HttpTransferListener {
 
   static interface Event {
     @Override
@@ -19,7 +25,7 @@ class EventLogTransferListener implements HttpTransferListener {
     int hashCode();
   }
 
-  static class Initialized implements EventLogTransferListener.Event {
+  static class Initialized implements EventLogHttpTransferListener.Event {
     private final Request request;
 
     public Initialized(Request request) {
@@ -66,7 +72,7 @@ class EventLogTransferListener implements HttpTransferListener {
     }
   }
 
-  static class Started implements EventLogTransferListener.Event {
+  static class Started implements EventLogHttpTransferListener.Event {
     private final URI uri;
     private final long totalBytes;
 
@@ -95,7 +101,7 @@ class EventLogTransferListener implements HttpTransferListener {
       if (getClass() != obj.getClass()) {
         return false;
       }
-      EventLogTransferListener.Started other = (EventLogTransferListener.Started) obj;
+      EventLogHttpTransferListener.Started other = (EventLogHttpTransferListener.Started) obj;
       if (this.totalBytes != other.totalBytes) {
         return false;
       }
@@ -111,7 +117,7 @@ class EventLogTransferListener implements HttpTransferListener {
 
   }
 
-  static class Progressed implements EventLogTransferListener.Event {
+  static class Progressed implements EventLogHttpTransferListener.Event {
     private final long bytes;
 
     public Progressed(long bytes) {
@@ -147,21 +153,21 @@ class EventLogTransferListener implements HttpTransferListener {
 
   }
 
-  static class Closed implements EventLogTransferListener.Event {
-    static final EventLogTransferListener.Closed INSTANCE = new Closed();
+  static class Closed implements EventLogHttpTransferListener.Event {
+    static final EventLogHttpTransferListener.Closed INSTANCE = new Closed();
 
     private Closed() {
       super();
     }
   }
 
-  private final List<EventLogTransferListener.Event> eventLog;
+  private final List<EventLogHttpTransferListener.Event> eventLog;
 
-  EventLogTransferListener() {
+  EventLogHttpTransferListener() {
     this.eventLog = new ArrayList<>();
   }
 
-  public List<EventLogTransferListener.Event> getEventLog() {
+  public List<EventLogHttpTransferListener.Event> getEventLog() {
     return this.eventLog;
   }
 

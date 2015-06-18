@@ -1,5 +1,7 @@
 package com.salesforce.zsync4j.http;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 /**
  * Content-Range used for http range requests
  * 
@@ -11,9 +13,9 @@ public class ContentRange {
   private final long last;
 
   public ContentRange(long first, long last) {
-    if (first < 0 || last < 0 || first > last) {
-      throw new IllegalArgumentException("first and last must be positive with first coming before last");
-    }
+    checkArgument(first >= 0, "first byte position must be positive integer");
+    checkArgument(last >= 0, "last byte position must be positive integer");
+    checkArgument(first <= last, "last byte position must be greater or equal to first byte position");
     this.first = first;
     this.last = last;
   }
@@ -37,7 +39,7 @@ public class ContentRange {
   }
 
   /**
-   * Returns how many bytes to return for this range
+   * Returns how many bytes are in this range
    *
    * @return
    */
@@ -59,20 +61,11 @@ public class ContentRange {
     if (this == obj) {
       return true;
     }
-    if (obj == null) {
-      return false;
-    }
-    if (getClass() != obj.getClass()) {
+    if (obj == null || getClass() != obj.getClass()) {
       return false;
     }
     ContentRange other = (ContentRange) obj;
-    if (this.first != other.first) {
-      return false;
-    }
-    if (this.last != other.last) {
-      return false;
-    }
-    return true;
+    return this.first == other.first && this.last == other.last;
   }
 
   @Override

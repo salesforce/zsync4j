@@ -4,12 +4,12 @@ import java.io.IOException;
 import java.security.DigestException;
 import java.security.MessageDigest;
 
-import com.salesforce.zsync4j.internal.util.MessageDigestAdapter;
 import com.salesforce.zsync4j.internal.util.ReadableByteBuffer;
+import com.salesforce.zsync4j.internal.util.WritableMessageDigest;
 
 class Checksum {
 
-  private final MessageDigestAdapter digest;
+  private final WritableMessageDigest writableMessageDigest;
   private final int length;
 
   // mutable
@@ -17,11 +17,11 @@ class Checksum {
   private boolean set;
 
   Checksum(MessageDigest digest, int length) {
-    this(new MessageDigestAdapter(digest), length, new byte[digest.getDigestLength()], false);
+    this(new WritableMessageDigest(digest), length, new byte[digest.getDigestLength()], false);
   }
 
-  private Checksum(MessageDigestAdapter digest, int length, byte[] bytes, boolean set) {
-    this.digest = digest;
+  private Checksum(WritableMessageDigest writeableMessageDigest, int length, byte[] bytes, boolean set) {
+    this.writableMessageDigest = writeableMessageDigest;
     this.length = length;
     this.bytes = bytes;
     this.set = set;
@@ -53,10 +53,10 @@ class Checksum {
   }
 
   void setChecksum(ReadableByteBuffer buffer, int offset, int length) {
-    this.digest.reset();
+    this.writableMessageDigest.getMessageDigest().reset();
     try {
-      buffer.write(this.digest, offset, length);
-      this.digest.digest(this.bytes, 0, this.bytes.length);
+      buffer.write(this.writableMessageDigest, offset, length);
+      this.writableMessageDigest.getMessageDigest().digest(this.bytes, 0, this.bytes.length);
     } catch (IOException | DigestException e) {
       throw new RuntimeException("Unexpected error during digest computation", e);
     }

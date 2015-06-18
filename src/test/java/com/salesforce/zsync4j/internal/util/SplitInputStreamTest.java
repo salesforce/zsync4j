@@ -18,10 +18,10 @@ public class SplitInputStreamTest {
    * Tests that the read method correctly terminates the stream after the boundary has been read and
    * that reading the next input stream resumes after the boundary.
    */
-  @SuppressWarnings("resource")
   @Test
   public void testRead() throws IOException {
     final byte[] data = new byte[] {'a', 'b', '\r', '\n', '\r', '\n', 'c', 'd'};
+    @SuppressWarnings("resource")
     final SplitInputStream sin = new SplitInputStream(new ByteArrayInputStream(data), new byte[] {'\r', '\n'});
 
     assertEquals('a', sin.read());
@@ -43,10 +43,10 @@ public class SplitInputStreamTest {
    * Tests that read returns -1 if the end of the stream is reached before a boundary is found and
    * that next throws an ISE in that case.
    */
-  @SuppressWarnings("resource")
   @Test
   public void testReadNoBoundary() throws IOException {
     final byte[] data = new byte[] {'a', 'b', '\r'};
+    @SuppressWarnings("resource")
     final SplitInputStream sin = new SplitInputStream(new ByteArrayInputStream(data), new byte[] {'\r', '\n'});
     assertEquals('a', sin.read());
     assertEquals('b', sin.read());
@@ -63,11 +63,11 @@ public class SplitInputStreamTest {
   /**
    * Asserts that reading a byte array across the boundary stops at the boundary as expected
    */
-  @SuppressWarnings("resource")
   @Test
   public void testReadArray() throws IOException {
     final byte[] data =
         new byte[] {'a', 'b', 'c', '\r', 'd', 'e', 'f', '\n', 'g', 'h', '\r', '\n', 'i', 'j', 'k', '\r', '\n', 'l', 'm'};
+    @SuppressWarnings("resource")
     final SplitInputStream sin = new SplitInputStream(new ByteArrayInputStream(data), new byte[] {'\r', '\n'});
     final byte[] b = new byte[11];
     assertEquals(b.length, sin.read(b));
@@ -81,5 +81,19 @@ public class SplitInputStreamTest {
     assertEquals(7, in.read(b));
     assertArrayEquals(copyOfRange(data, 12, 19), copyOf(b, 7));
     assertEquals(-1, in.read());
+  }
+
+  @Test
+  public void testReadEndBeforeBoundary() throws IOException {
+    final byte[] data = new byte[0];
+    @SuppressWarnings("resource")
+    final SplitInputStream sin = new SplitInputStream(new ByteArrayInputStream(data), new byte[] {'\r', '\n'});
+    final byte[] b = new byte[1];
+    assertEquals(-1, sin.read(b));
+    try {
+      sin.next();
+    } catch (IllegalStateException e) {
+      assertEquals("boundary not reached", e.getMessage());
+    }
   }
 }

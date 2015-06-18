@@ -28,11 +28,11 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.salesforce.zsync4j.http.ContentRange;
 import com.salesforce.zsync4j.http.Credentials;
-import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Closed;
-import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Event;
-import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Initialized;
-import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Progressed;
-import com.salesforce.zsync4j.internal.util.EventLogTransferListener.Started;
+import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Closed;
+import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Event;
+import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Initialized;
+import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Progressed;
+import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Started;
 import com.salesforce.zsync4j.internal.util.HttpClient.HttpTransferListener;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeTransferListener;
@@ -141,7 +141,7 @@ public class HttpClientTest {
     final OkHttpClient mockHttpClient = mock(OkHttpClient.class);
     when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
 
-    final EventLogTransferListener listener = new EventLogTransferListener();
+    final EventLogHttpTransferListener listener = new EventLogHttpTransferListener();
     final InputStream in =
         new HttpClient(mockHttpClient).get(uri, Collections.<String, Credentials>emptyMap(), listener);
     final byte[] b = new byte[8];
