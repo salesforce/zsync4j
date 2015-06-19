@@ -11,6 +11,6 @@ public abstract class BlockMatcher {
 
   public abstract int getMatcherBlockSize();
 
-  public abstract int match(OutputFile targetFile, ReadableByteBuffer data);
+  public abstract int match(OutputFileWriter targetFile, ReadableByteBuffer data);
 
 }

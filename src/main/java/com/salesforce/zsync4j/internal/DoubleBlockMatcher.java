@@ -65,7 +65,7 @@ public class DoubleBlockMatcher extends BlockMatcher {
   }
 
   @Override
-  public int match(OutputFile outputFile, ReadableByteBuffer buffer) {
+  public int match(OutputFileWriter outputFile, ReadableByteBuffer buffer) {
     switch (this.state) {
       case INIT:
         // initially we have to compute the rsum from scratch for both blocks
@@ -125,7 +125,7 @@ public class DoubleBlockMatcher extends BlockMatcher {
     return this.blockSize;
   }
 
-  private int matchedBoth(OutputFile outputFile, ReadableByteBuffer buffer) {
+  private int matchedBoth(OutputFileWriter outputFile, ReadableByteBuffer buffer) {
     for (int p : this.matches) {
       outputFile.writeBlock(p, buffer, 0);
       if (++p != outputFile.getNumBlocks()) {
@@ -136,7 +136,7 @@ public class DoubleBlockMatcher extends BlockMatcher {
     return this.blockSize;
   }
 
-  private List<Integer> tryMatchBoth(final OutputFile outputFile, final ReadableByteBuffer buffer) {
+  private List<Integer> tryMatchBoth(final OutputFileWriter outputFile, final ReadableByteBuffer buffer) {
     final List<Integer> matches;
     final Long r = toLong(this.currentBlockSum.rsum.toInt(), this.nextBlockSum.rsum.toInt());
     // cheap negative check followed by more expensive check
@@ -150,12 +150,12 @@ public class DoubleBlockMatcher extends BlockMatcher {
     return matches;
   }
 
-  private List<Integer> tryMatchNext(final OutputFile outputFile, final ReadableByteBuffer buffer) {
+  private List<Integer> tryMatchNext(final OutputFileWriter outputFile, final ReadableByteBuffer buffer) {
     final List<Integer> positions = outputFile.getPositions(this.currentBlockSum);
     return positions.isEmpty() ? Collections.<Integer>emptyList() : this.filterMatches(outputFile, buffer, positions);
   }
 
-  private List<Integer> filterMatches(final OutputFile outputFile, ReadableByteBuffer buffer, List<Integer> positions) {
+  private List<Integer> filterMatches(final OutputFileWriter outputFile, ReadableByteBuffer buffer, List<Integer> positions) {
     // optimize common case
     if (positions.size() == 1) {
       return this.isNextMatch(outputFile, buffer, positions.get(0)) ? positions : Collections.<Integer>emptyList();
@@ -170,7 +170,7 @@ public class DoubleBlockMatcher extends BlockMatcher {
     }
   }
 
-  private boolean isNextMatch(OutputFile outputFile, ReadableByteBuffer buffer, Integer position) {
+  private boolean isNextMatch(OutputFileWriter outputFile, ReadableByteBuffer buffer, Integer position) {
     final Integer next = position + 1;
     if (next == outputFile.getNumBlocks()) {
       return true;

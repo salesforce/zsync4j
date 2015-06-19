@@ -7,29 +7,22 @@ zsync4j is a Java port of [zsync](http://zsync.moria.org.uk/). In a nutshell, zs
 
 ### Upload
 
-When you upload a file to your http server, generate a .zsync file and upload it along with it. To generate the zsync file use [zsyncmake](http://linux.die.net/man/1/zsyncmake):
+Generate a zsync file using [zsyncmake](http://linux.die.net/man/1/zsyncmake) for the file you are uploading and upload the zsync file along with it. For example, to generate a zsync file for an iso in the current working directory use:
 
 ```Java
 ZsyncMake zsyncmake = new ZsyncMake();
-
-Path file = Paths.get("/Users/ubuntu/20150612/wily-desktop-i386.iso");
-Path zsyncFile = zsyncmake.writeToFile(file).getOutputFile();
-
-// upload file and zsync file ...
+Path file = Paths.get("wily-desktop-i386.iso");
+zsyncmake.make(file);
 ```
 
 ### Download
 
-To download a file use [zsync](http://linux.die.net/man/1/zsync):
+To download a file use [zsync](http://linux.die.net/man/1/zsync). For example, to update your local iso with only changed parts of a newer remote version use:
 
 ```Java
 Zsync zsync = new Zsync();
-
 URI zsyncFileURI = URI.create("http://cdimage.ubuntu.com/daily-live/20150612/wily-desktop-i386.iso.zsync");
-Path prevVersion = Path.get("/Users/ubuntu/20150611/wily-desktop-i386.iso");
-Options options = new Options().addInputFile(prevVersion);
-
-Path outputFile = zsync.zsync(zsyncFileURI, options).getOutputFile();
+zsync.zsync(zsyncFileURI);
 ```
 
 

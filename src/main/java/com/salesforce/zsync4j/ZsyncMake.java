@@ -47,6 +47,18 @@ public class ZsyncMake {
   public ZsyncMake() {}
 
   /**
+   * Creates a zsync file next to the given input file. The filename and URL headers will be set to
+   * the file name of the input file and the block size will be automaticallydetermined based on the
+   * input file size.
+   * 
+   * @param inputFile Input file for which to generate a zsync file
+   * @return Path location of zsync output file
+   */
+  public Path make(Path inputFile) {
+    return this.writeToFile(inputFile).getOutputFile();
+  }
+
+  /**
    * Writes zsync control data for the specified input file to the supplied output stream. The
    * output stream is not closed.
    * 

@@ -1,5 +1,6 @@
 package com.salesforce.zsync4j.internal;
 
+import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.READ;
@@ -12,6 +13,7 @@ import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,7 +29,7 @@ import com.salesforce.zsync4j.internal.util.TransferListener;
 import com.salesforce.zsync4j.internal.util.TransferListener.ResourceTransferListener;
 import com.salesforce.zsync4j.internal.util.ZsyncUtil;
 
-public class OutputFile implements RangeReceiver, Closeable {
+public class OutputFileWriter implements RangeReceiver, Closeable {
 
   // immutable state
   private final Path path;
@@ -46,7 +48,8 @@ public class OutputFile implements RangeReceiver, Closeable {
   private int blocksRemaining;
   private TransferListener listener;
 
-  public OutputFile(Path path, ControlFile controlFile, ResourceTransferListener<Path> listener) throws IOException {
+  public OutputFileWriter(Path path, ControlFile controlFile, ResourceTransferListener<Path> listener)
+      throws IOException {
     this.path = path;
     this.listener = listener;
 
@@ -181,7 +184,11 @@ public class OutputFile implements RangeReceiver, Closeable {
       if (!this.sha1.equals(calculatedSha1)) {
         throw new ChecksumValidationIOException(this.sha1, calculatedSha1);
       }
-      Files.move(this.tempPath, this.path, REPLACE_EXISTING, REPLACE_EXISTING);
+      try {
+        Files.move(this.tempPath, this.path, REPLACE_EXISTING, ATOMIC_MOVE);
+      } catch (AtomicMoveNotSupportedException e) {
+        Files.move(this.tempPath, this.path, REPLACE_EXISTING);
+      }
       Files.setLastModifiedTime(this.path, fromMillis(this.mtime));
     } finally {
       this.channel.close();

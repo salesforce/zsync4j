@@ -40,7 +40,7 @@ public class SingleBlockMatcher extends BlockMatcher {
   }
 
   @Override
-  public int match(OutputFile targetFile, ReadableByteBuffer buffer) {
+  public int match(OutputFileWriter targetFile, ReadableByteBuffer buffer) {
     switch (this.state) {
       case INIT:
         this.blockSum.rsum.init(buffer);
