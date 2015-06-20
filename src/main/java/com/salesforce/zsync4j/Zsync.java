@@ -26,8 +26,8 @@
 package com.salesforce.zsync4j;
 
 import static com.salesforce.zsync4j.internal.util.HttpClient.newHttpClient;
+import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -52,6 +52,7 @@ import com.salesforce.zsync4j.internal.EventDispatcher;
 import com.salesforce.zsync4j.internal.Header;
 import com.salesforce.zsync4j.internal.OutputFileWriter;
 import com.salesforce.zsync4j.internal.util.HttpClient;
+import com.salesforce.zsync4j.internal.util.HttpClient.HttpError;
 import com.salesforce.zsync4j.internal.util.HttpClient.HttpTransferListener;
 import com.salesforce.zsync4j.internal.util.ObservableInputStream;
 import com.salesforce.zsync4j.internal.util.ObservableRedableByteChannel.ObservableReadableResourceChannel;
@@ -317,7 +318,7 @@ public class Zsync {
    * @throws ZsyncException
    */
   public Path zsync(URI zsyncFile, Options options, ZsyncObserver observer) throws ZsyncException {
-    final EventDispatcher events = new EventDispatcher(observer == null ? new ZsyncObserver() : null);
+    final EventDispatcher events = new EventDispatcher(observer == null ? new ZsyncObserver() : observer);
     try {
       options = new Options(options); // Copy, since the supplied Options object is mutable
       events.zsyncStarted(zsyncFile, options);
@@ -334,8 +335,11 @@ public class Zsync {
     final ControlFile controlFile;
     try (InputStream in = this.openZsyncFile(zsyncFile, this.httpClient, options, events)) {
       controlFile = ControlFile.read(in);
-    } catch (FileNotFoundException e) {
-      throw new ZsyncControlFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
+    } catch (HttpError e) {
+      if (e.getCode() == HTTP_NOT_FOUND) {
+        throw new ZsyncControlFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
+      }
+      throw new ZsyncException("Unexpected Http error retrieving zsync file", e);
     } catch (IOException e) {
       throw new ZsyncException("Failed to read zsync control file", e);
     }
@@ -369,7 +373,7 @@ public class Zsync {
       }
     } catch (ChecksumValidationIOException exception) {
       throw new ZsyncChecksumValidationFailedException("Calculated checksum does not match expected checksum");
-    } catch (IOException e) {
+    } catch (IOException | HttpError e) {
       throw new ZsyncException(e);
     }
 
@@ -393,9 +397,10 @@ public class Zsync {
    *
    * @return
    * @throws IOException
+   * @throws HttpError
    */
   private InputStream openZsyncFile(URI zsyncFile, HttpClient httpClient, Options options, EventDispatcher events)
-      throws IOException {
+      throws IOException, HttpError {
     final InputStream in;
     if (zsyncFile.isAbsolute()) {
       // check if it's a local URI

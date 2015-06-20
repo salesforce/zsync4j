@@ -68,7 +68,7 @@ public class ContentRange {
    *
    * @return
    */
-  public long size() {
+  public long length() {
     return this.last - this.first + 1;
   }
 

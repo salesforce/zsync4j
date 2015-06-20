@@ -90,7 +90,9 @@ public class OutputFileWriter implements RangeReceiver, Closeable {
     final String tmpName = path.getFileName().toString() + ".part";
     final Path parent = path.getParent();
     if (parent != null) {
-      Files.createDirectories(parent);
+      if (!Files.isDirectory(parent)) {
+        Files.createDirectories(parent);
+      }
       this.tempPath = parent.resolve(tmpName);
     } else {
       this.tempPath = Paths.get(tmpName);
@@ -182,10 +184,10 @@ public class OutputFileWriter implements RangeReceiver, Closeable {
     }
 
     final ReadableByteChannel src = Channels.newChannel(in);
-    final long size = range.size();
-    long remaining = size;
+    final long length = range.length();
+    long remaining = length;
     do {
-      long transferred = this.channel.transferFrom(src, range.first(), size);
+      long transferred = this.channel.transferFrom(src, range.first(), length);
       remaining -= transferred;
       this.listener.transferred(transferred);
     } while (remaining > 0);

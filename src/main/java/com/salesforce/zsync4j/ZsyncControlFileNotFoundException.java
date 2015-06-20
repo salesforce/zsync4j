@@ -25,7 +25,6 @@
  */
 package com.salesforce.zsync4j;
 
-import java.io.FileNotFoundException;
 
 /**
  * An exception indicating that a zsync control file could not be found.
@@ -37,7 +36,7 @@ public class ZsyncControlFileNotFoundException extends ZsyncException {
 
   private static final long serialVersionUID = -4355008458949773385L;
 
-  public ZsyncControlFileNotFoundException(String message, FileNotFoundException cause) {
+  public ZsyncControlFileNotFoundException(String message, Throwable cause) {
     super(message, cause);
   }
 

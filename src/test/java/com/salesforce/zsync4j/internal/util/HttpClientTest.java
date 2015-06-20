@@ -25,9 +25,14 @@
  */
 package com.salesforce.zsync4j.internal.util;
 
+import static com.salesforce.zsync4j.internal.util.HttpClient.getBoundary;
+import static com.salesforce.zsync4j.internal.util.HttpClient.parseContentRange;
+import static com.salesforce.zsync4j.internal.util.HttpClient.parseContentType;
 import static com.squareup.okhttp.Protocol.HTTP_1_1;
 import static java.net.HttpURLConnection.HTTP_OK;
 import static java.net.HttpURLConnection.HTTP_UNAUTHORIZED;
+import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
@@ -38,6 +43,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -50,7 +57,9 @@ import org.junit.Test;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.net.MediaType;
 import com.salesforce.zsync4j.http.ContentRange;
 import com.salesforce.zsync4j.http.Credentials;
 import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Closed;
@@ -58,6 +67,7 @@ import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Event;
 import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Initialized;
 import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Started;
 import com.salesforce.zsync4j.internal.util.EventLogHttpTransferListener.Transferred;
+import com.salesforce.zsync4j.internal.util.HttpClient.HttpError;
 import com.salesforce.zsync4j.internal.util.HttpClient.HttpTransferListener;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeReceiver;
 import com.salesforce.zsync4j.internal.util.HttpClient.RangeTransferListener;
@@ -69,6 +79,120 @@ import com.squareup.okhttp.Response;
 import com.squareup.okhttp.ResponseBody;
 
 public class HttpClientTest {
+
+  @Test(expected = IOException.class)
+  public void testGetBoundaryNoAttributeValue() throws IOException {
+    getBoundary(MediaType.create("multipart", "byteranges"));
+  }
+
+  @Test(expected = IOException.class)
+  public void testGetBoundaryInvalidSubtype() throws IOException {
+    getBoundary(MediaType.create("multipart", "mixed"));
+  }
+
+  @Test
+  public void testGetBoundary() throws IOException {
+    final String expected = "gc0p4Jq0M2Yt08jU534c0p";
+    assertArrayEquals(expected.getBytes(ISO_8859_1), getBoundary(MediaType.create("multipart", "byteranges")
+        .withParameters(ImmutableMultimap.of("boundary", expected))));
+  }
+
+  @Test
+  public void testParseContentTypeNull() throws IOException {
+    final Response response = fakeResponse(HTTP_OK);
+    assertNull(parseContentType(response));
+  }
+
+  @Test(expected = IOException.class)
+  public void testParseContentTypeInvalid() throws IOException {
+    final Response response = fakeResponse(HTTP_OK).newBuilder().addHeader("Content-Type", "bla").build();
+    parseContentType(response);
+  }
+
+  @Test
+  public void testParseContentTypeMultipart() throws IOException {
+    final Response response =
+        fakeResponse(HTTP_OK).newBuilder()
+            .addHeader("Content-Type", "multipart/byteranges;boundary=gc0p4Jq0M2Yt08jU534c0p").build();
+    assertEquals(
+        MediaType.create("multipart", "byteranges").withParameters(
+            ImmutableMultimap.of("boundary", "gc0p4Jq0M2Yt08jU534c0p")), parseContentType(response));
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeInvalidBytesUnit() throws ParseException {
+    parseContentRange("byte 1-3/3");
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeMissingSeparator() throws ParseException {
+    parseContentRange("bytes 1 3/3");
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeMissingFirst() throws ParseException {
+    parseContentRange("bytes -3/3");
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeInvalidFirst() throws ParseException {
+    parseContentRange("bytes a-3/3");
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeNegativeFirst() throws ParseException {
+    parseContentRange("bytes -1-3/5");
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeMissingLast() throws ParseException {
+    parseContentRange("bytes 1-/3");
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeInvalidLast() throws ParseException {
+    parseContentRange("bytes 1-a/3");
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeNegativeLast() throws ParseException {
+    parseContentRange("bytes 1--3/3");
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeMissingDash() throws ParseException {
+    parseContentRange("bytes 1-3 3");
+  }
+
+  @Test
+  public void testParseContentRangeMissingLength() throws ParseException {
+    assertEquals(new ContentRange(1, 3), parseContentRange("bytes 1-3/"));
+  }
+
+  @Test
+  public void testParseContentRangeInvalidLength() throws ParseException {
+    assertEquals(new ContentRange(1, 3), parseContentRange("bytes 1-3/b"));
+  }
+
+  @Test
+  public void testParseContentRangeIncorrectLength() throws ParseException {
+    assertEquals(new ContentRange(1, 3), parseContentRange("bytes 1-3/4"));
+  }
+
+  @Test(expected = ParseException.class)
+  public void testParseContentRangeFirstLargerLast() throws ParseException {
+    parseContentRange("bytes 3-1/3");
+  }
+
+  @Test
+  public void testParseContentRangeNoLength() throws ParseException {
+    assertEquals(new ContentRange(1, 3), parseContentRange("bytes 1-3/*"));
+  }
+
+  @Test
+  public void testParseContentRange() throws ParseException {
+    assertEquals(new ContentRange(1, 3), parseContentRange("bytes 1-3/3"));
+  }
 
   @Test
   public void exceptionThrownFromConstructorForNullHttpClient() {
@@ -110,7 +234,7 @@ public class HttpClientTest {
 
   @SuppressWarnings("unchecked")
   @Test
-  public void runtimeExceptionThrownForHttpResponsesOtherThan206() throws Exception {
+  public void runtimeExceptionThrownForHttpResponsesOtherThan206() throws IOException, URISyntaxException {
     // Arrange
     List<Integer> responsesToTest = Lists.newArrayList(500, 413); // Add whatever other ones we want
     OkHttpClient mockHttpClient = mock(OkHttpClient.class);
@@ -132,11 +256,8 @@ public class HttpClientTest {
       try {
         new HttpClient(mockHttpClient).partialGet(url, ranges, Collections.<String, Credentials>emptyMap(),
             mockReceiver, listener);
-      } catch (IOException exception) {
-
-        // Assert
-        assertEquals("Http request for resource " + url + " returned unexpected http code: " + responseToTest,
-            exception.getMessage());
+      } catch (HttpError exception) {
+        assertEquals(responseToTest.intValue(), exception.getCode());
       }
     }
 
@@ -148,7 +269,7 @@ public class HttpClientTest {
   }
 
   @Test
-  public void testTransferListener() throws IOException {
+  public void testTransferListener() throws IOException, HttpError {
     final URI uri = URI.create("http://host/bla");
 
     final byte[] data = new byte[17];
@@ -183,7 +304,7 @@ public class HttpClientTest {
   }
 
   @Test
-  public void testChallenges() throws IOException {
+  public void testChallenges() throws IOException, HttpError {
     final URI uri = URI.create("https://host/file");
     final Map<String, Credentials> credentials = ImmutableMap.of("host", new Credentials("jdoe", "secret"));
     final MockOkHttpClient okHttpClient = new MockOkHttpClient();

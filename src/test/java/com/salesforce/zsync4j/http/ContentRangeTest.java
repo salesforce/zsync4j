@@ -51,13 +51,13 @@ public class ContentRangeTest {
   }
 
   @Test
-  public void testSize() {
-    assertEquals(2, new ContentRange(1, 2).size());
+  public void testLength() {
+    assertEquals(2, new ContentRange(1, 2).length());
   }
 
   @Test
-  public void testSizeSingle() {
-    assertEquals(1, new ContentRange(2, 2).size());
+  public void testLengthSingle() {
+    assertEquals(1, new ContentRange(2, 2).length());
   }
 
   @Test
