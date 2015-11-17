@@ -1,69 +1,61 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.salesforce</groupId>
-  <artifactId>zsync4j</artifactId>
-  <version>0.0.11-SNAPSHOT</version>
-  <packaging>takari-jar</packaging>
-
-  <properties>
-    <takari.lifecycle.version>1.11.10</takari.lifecycle.version>
-  </properties>
+  <groupId>com.salesforce.zsync</groupId>
+  <artifactId>zsync-parent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
 
   <scm>
-    <connection>scm:git:git@git.soma.salesforce.com:modularization-team/zsync4j.git</connection>
-    <developerConnection>scm:git:git@git.soma.salesforce.com:modularization-team/zsync4j.git</developerConnection>
-    <url>https://git.soma.salesforce.com/modularization-team/zsync4j</url>
+    <connection>scm:git:git@github.com:SalesforceEng/zsync4j</connection>
+    <developerConnection>scm:git:git@github.com:SalesforceEng/zsync4j.git</developerConnection>
+    <url>https://github.com/SalesforceEng/zsync4j</url>
     <tag>HEAD</tag>
   </scm>
 
-  <distributionManagement>
-    <repository>
-      <id>nexus</id>
-      <url>https://nexus.soma.salesforce.com/nexus/content/repositories/releases/</url>
-    </repository>
-    <snapshotRepository>
-      <id>nexus</id>
-      <url>https://nexus.soma.salesforce.com/nexus/content/repositories/snapshots/</url>
-    </snapshotRepository>
-  </distributionManagement>
+  <modules>
+    <module>zsync-core</module>
+  </modules>
 
-  <dependencies>
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>4.12</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.squareup.okhttp</groupId>
-      <artifactId>okhttp</artifactId>
-      <version>2.5.0</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>18.0</version>
-    </dependency>
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-all</artifactId>
-      <version>1.10.19</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-server</artifactId>
-      <version>9.3.0.RC0</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-servlet</artifactId>
-      <version>9.3.0.RC0</version>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.12</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.squareup.okhttp</groupId>
+        <artifactId>okhttp</artifactId>
+        <version>2.5.0</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>18.0</version>
+      </dependency>
+      <dependency>
+        <groupId>org.mockito</groupId>
+        <artifactId>mockito-all</artifactId>
+        <version>1.10.19</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-server</artifactId>
+        <version>9.3.0.RC0</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-servlet</artifactId>
+        <version>9.3.0.RC0</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <build>
     <testResources>
@@ -78,9 +70,9 @@
       <plugin>
         <groupId>io.takari.maven.plugins</groupId>
         <artifactId>takari-lifecycle-plugin</artifactId>
-        <version>${takari.lifecycle.version}</version>
+        <version>1.11.11</version>
         <extensions>true</extensions>
-      </plugin> 
+      </plugin>
     </plugins>
     <pluginManagement>
       <plugins>
@@ -99,24 +91,5 @@
       </plugins>
     </pluginManagement>
   </build>
-  
-  <repositories>
-    <repository>
-      <releases>
-        <enabled>true</enabled>
-        <updatePolicy>always</updatePolicy>
-        <checksumPolicy>warn</checksumPolicy>
-      </releases>
-      <snapshots>
-        <enabled>true</enabled>
-        <updatePolicy>never</updatePolicy>
-        <checksumPolicy>fail</checksumPolicy>
-      </snapshots>
-      <id>nexus.soma</id>
-      <name>Salesforce Nexus</name>
-      <url>https://nexus.soma.salesforce.com/nexus/content/groups/public/</url>
-      <layout>default</layout>
-    </repository>
-  </repositories>
-  
+
 </project>
