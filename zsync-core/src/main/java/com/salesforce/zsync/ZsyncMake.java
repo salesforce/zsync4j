@@ -45,11 +45,10 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.TimeZone;
 
-import com.salesforce.zsync.ZsyncMakeTest;
 import com.salesforce.zsync.internal.util.ZsyncUtil;
 
 /**
- * Constructs a zsync file for a given input file. Construct via {@link ZsyncMakeTest.Builder}.
+ * Constructs a zsync file for a given input file.
  *
  * @author bbusjaeger
  */
