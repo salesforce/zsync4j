@@ -14,6 +14,13 @@
     <tag>HEAD</tag>
   </scm>
 
+  <properties>
+    <!-- by default deploy to https://oss.sonatype.org -->
+    <nexus.repo.id>ossrh</nexus.repo.id>
+    <nexus.repo.url>https://oss.sonatype.org/service/local/staging/deploy/maven2</nexus.repo.url>
+    <nexus.snapshots-repo.url>https://oss.sonatype.org/content/repositories/snapshots</nexus.snapshots-repo.url>
+  </properties>
+
   <modules>
     <module>zsync-core</module>
   </modules>
@@ -24,7 +31,6 @@
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
         <version>4.12</version>
-        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>com.squareup.okhttp</groupId>
@@ -40,19 +46,16 @@
         <groupId>org.mockito</groupId>
         <artifactId>mockito-all</artifactId>
         <version>1.10.19</version>
-        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.eclipse.jetty</groupId>
         <artifactId>jetty-server</artifactId>
         <version>9.3.0.RC0</version>
-        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.eclipse.jetty</groupId>
         <artifactId>jetty-servlet</artifactId>
         <version>9.3.0.RC0</version>
-        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -79,17 +82,53 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-release-plugin</artifactId>
-          <version>2.5</version>
+          <version>2.5.3</version>
           <configuration>
             <localCheckout>true</localCheckout>
             <pushChanges>false</pushChanges>
+            <autoVersionSubmodules>true</autoVersionSubmodules>
             <useReleaseProfile>false</useReleaseProfile>
+            <releaseProfiles>release</releaseProfiles>
             <goals>deploy</goals>
-            <arguments>-Ptakari-release</arguments>
           </configuration>
         </plugin>
       </plugins>
     </pluginManagement>
   </build>
+
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>1.6</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
+  <distributionManagement>
+    <repository>
+      <id>${nexus.repo.id}</id>
+      <url>${nexus.repo.url}</url>
+    </repository>
+    <snapshotRepository>
+      <id>${nexus.repo.id}</id>
+      <url>${nexus.snapshots-repo.url}</url>
+    </snapshotRepository>
+  </distributionManagement>
 
 </project>
