@@ -90,6 +90,7 @@
             <useReleaseProfile>false</useReleaseProfile>
             <releaseProfiles>release</releaseProfiles>
             <tagNameFormat>zsync-@{project.version}</tagNameFormat>
+            <arguments>-B</arguments>
             <goals>deploy</goals>
           </configuration>
         </plugin>
