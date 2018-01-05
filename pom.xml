@@ -6,6 +6,36 @@
   <artifactId>zsync-parent</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
+  <description>Java port of zsync.</description>
+
+  <licenses>
+    <license>
+      <name>BSD License 2.0 (3-Clause BSD)</name>
+      <url>https://opensource.org/licenses/BSD-3-Clause</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>busjaeger</id>
+      <name>Ben Busjaeger</name>
+      <email>bbusjaeger@salesforce.com</email>
+      <roles>
+        <role>Developer</role>
+      </roles>
+      <timezone>-8</timezone>
+    </developer>
+    <developer>
+      <id>brianstclair-sfdc</id>
+      <name>Brian St Clair</name>
+      <email>bstclair@salesforce.com</email>
+      <roles>
+        <role>Developer</role>
+      </roles>
+      <timezone>-5</timezone>
+    </developer>
+  </developers>
 
   <scm>
     <connection>scm:git:git@github.com:SalesforceEng/zsync4j</connection>
