@@ -2,58 +2,18 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.salesforce.zsync</groupId>
-  <artifactId>zsync-parent</artifactId>
+  <groupId>co.bitshifted.xapps</groupId>
+  <artifactId>zsyncer</artifactId>
   <version>0.1.0-SNAPSHOT</version>
-  <packaging>pom</packaging>
+  <packaging>jar</packaging>
   <description>Java port of zsync.</description>
 
-  <licenses>
-    <license>
-      <name>BSD License 2.0 (3-Clause BSD)</name>
-      <url>https://opensource.org/licenses/BSD-3-Clause</url>
-      <distribution>repo</distribution>
-    </license>
-  </licenses>
-
-  <developers>
-    <developer>
-      <id>busjaeger</id>
-      <name>Ben Busjaeger</name>
-      <email>bbusjaeger@salesforce.com</email>
-      <roles>
-        <role>Developer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>brianstclair-sfdc</id>
-      <name>Brian St Clair</name>
-      <email>bstclair@salesforce.com</email>
-      <roles>
-        <role>Developer</role>
-      </roles>
-      <timezone>-5</timezone>
-    </developer>
-  </developers>
-
-  <scm>
-    <connection>scm:git:git@github.com:SalesforceEng/zsync4j</connection>
-    <developerConnection>scm:git:git@github.com:SalesforceEng/zsync4j.git</developerConnection>
-    <url>https://github.com/SalesforceEng/zsync4j</url>
-    <tag>HEAD</tag>
-  </scm>
 
   <properties>
-    <!-- by default deploy to https://oss.sonatype.org -->
-    <nexus.repo.id>ossrh</nexus.repo.id>
-    <nexus.repo.url>https://oss.sonatype.org/service/local/staging/deploy/maven2</nexus.repo.url>
-    <nexus.snapshots-repo.url>https://oss.sonatype.org/content/repositories/snapshots</nexus.snapshots-repo.url>
+    <maven.compiler.source>11</maven.compiler.source>
+    <maven.compiler.target>11</maven.compiler.target>
   </properties>
 
-  <modules>
-    <module>zsync-core</module>
-  </modules>
 
   <dependencyManagement>
     <dependencies>
@@ -90,6 +50,37 @@
     </dependencies>
   </dependencyManagement>
 
+   <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.squareup.okhttp</groupId>
+      <artifactId>okhttp</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-all</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-server</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-servlet</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
   <build>
     <testResources>
       <testResource>
@@ -99,68 +90,7 @@
         <directory>src/test/web</directory>
       </testResource>
     </testResources>
-    <plugins>
-      <plugin>
-        <groupId>io.takari.maven.plugins</groupId>
-        <artifactId>takari-lifecycle-plugin</artifactId>
-        <version>1.11.11</version>
-        <extensions>true</extensions>
-      </plugin>
-    </plugins>
-    <pluginManagement>
-      <plugins>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-release-plugin</artifactId>
-          <version>2.5.3</version>
-          <configuration>
-            <localCheckout>true</localCheckout>
-            <pushChanges>false</pushChanges>
-            <autoVersionSubmodules>true</autoVersionSubmodules>
-            <useReleaseProfile>false</useReleaseProfile>
-            <releaseProfiles>release</releaseProfiles>
-            <tagNameFormat>zsync-@{project.version}</tagNameFormat>
-            <arguments>-B</arguments>
-            <goals>deploy</goals>
-          </configuration>
-        </plugin>
-      </plugins>
-    </pluginManagement>
   </build>
 
-  <profiles>
-    <profile>
-      <id>release</id>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-gpg-plugin</artifactId>
-            <version>1.6</version>
-            <executions>
-              <execution>
-                <id>sign-artifacts</id>
-                <phase>verify</phase>
-                <goals>
-                  <goal>sign</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
-
-  <distributionManagement>
-    <repository>
-      <id>${nexus.repo.id}</id>
-      <url>${nexus.repo.url}</url>
-    </repository>
-    <snapshotRepository>
-      <id>${nexus.repo.id}</id>
-      <url>${nexus.snapshots-repo.url}</url>
-    </snapshotRepository>
-  </distributionManagement>
 
 </project>

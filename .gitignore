@@ -7,3 +7,7 @@ release.properties
 .project
 .classpath
 .settings/
+
+.idea/
+.DS_Store
+
