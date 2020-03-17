@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2015, Salesforce.com, Inc. All rights reserved.
+ * Copyright (c) 2020, Bitshift (bitshifted.co), Inc. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without modification, are permitted
  * provided that the following conditions are met:
@@ -38,7 +39,7 @@ import org.junit.Test;
 
 import com.salesforce.zsync.Zsync;
 import com.salesforce.zsync.Zsync.Options;
-import com.squareup.okhttp.OkHttpClient;
+
 
 /**
  * Describe your class here.
@@ -58,7 +59,7 @@ public class GetTest extends BaseJettyTest {
     Options options = new Options().addInputFile(Paths.get(oldGuava.toURI())).setOutputFile(outputPath);
 
     // Act
-    Path result = new Zsync(new OkHttpClient()).zsync(uri, options);
+    Path result = new Zsync().zsync(uri, options);
 
     // Assert
     assertEquals("results has wrong output file path", outputPath, result);

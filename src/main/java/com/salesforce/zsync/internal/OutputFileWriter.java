@@ -51,7 +51,7 @@ import com.salesforce.zsync.http.ContentRange;
 import com.salesforce.zsync.internal.util.ReadableByteBuffer;
 import com.salesforce.zsync.internal.util.TransferListener;
 import com.salesforce.zsync.internal.util.ZsyncUtil;
-import com.salesforce.zsync.internal.util.HttpClient.RangeReceiver;
+import com.salesforce.zsync.internal.util.ZsyncClient.RangeReceiver;
 import com.salesforce.zsync.internal.util.TransferListener.ResourceTransferListener;
 
 public class OutputFileWriter implements RangeReceiver, Closeable {

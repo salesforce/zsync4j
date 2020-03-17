@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2015, Salesforce.com, Inc. All rights reserved.
+ * Copyright (c) 2020, Bitshift (bitshifted.co), Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
  * following conditions are met:
@@ -23,43 +24,29 @@
  */
 package com.salesforce.zsync;
 
-import static com.salesforce.zsync.internal.util.HttpClient.newHttpClient;
-import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
+import com.salesforce.zsync.ZsyncStatsObserver.ZsyncStats;
+import com.salesforce.zsync.http.Credentials;
+import com.salesforce.zsync.internal.*;
+import com.salesforce.zsync.internal.util.*;
+import com.salesforce.zsync.internal.util.ObservableRedableByteChannel.ObservableReadableResourceChannel;
+import com.salesforce.zsync.internal.util.TransferListener.ResourceTransferListener;
+import com.salesforce.zsync.internal.util.ZsyncClient.HttpError;
+import com.salesforce.zsync.internal.util.ZsyncClient.HttpTransferListener;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.salesforce.zsync.ZsyncStatsObserver.ZsyncStats;
-import com.salesforce.zsync.http.Credentials;
-import com.salesforce.zsync.internal.BlockMatcher;
-import com.salesforce.zsync.internal.ChecksumValidationIOException;
-import com.salesforce.zsync.internal.ControlFile;
-import com.salesforce.zsync.internal.EventDispatcher;
-import com.salesforce.zsync.internal.Header;
-import com.salesforce.zsync.internal.OutputFileWriter;
-import com.salesforce.zsync.internal.util.HttpClient;
-import com.salesforce.zsync.internal.util.ObservableInputStream;
-import com.salesforce.zsync.internal.util.RollingBuffer;
-import com.salesforce.zsync.internal.util.ZeroPaddedReadableByteChannel;
-import com.salesforce.zsync.internal.util.ZsyncUtil;
-import com.salesforce.zsync.internal.util.HttpClient.HttpError;
-import com.salesforce.zsync.internal.util.HttpClient.HttpTransferListener;
-import com.salesforce.zsync.internal.util.ObservableRedableByteChannel.ObservableReadableResourceChannel;
-import com.salesforce.zsync.internal.util.TransferListener.ResourceTransferListener;
-import com.squareup.okhttp.OkHttpClient;
+import static com.salesforce.zsync.internal.util.ZsyncClient.newZsyncClient;
+import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
+
 
 /**
  * Zsync download client: reduces the number of bytes retrieved from a remote server by drawing unchanged parts of the
@@ -68,6 +55,7 @@ import com.squareup.okhttp.OkHttpClient;
  * @see <a href="http://zsync.moria.org.uk/">http://zsync.moria.org.uk/</a>
  *
  * @author bbusjaeger
+ * @author Vladimir Djurovic
  *
  */
 public class Zsync {
@@ -226,27 +214,20 @@ public class Zsync {
 
   public static final String VERSION = "0.6.2";
 
-  private final HttpClient httpClient;
+  private final ZsyncClient zsyncClient;
 
   /**
    * Creates a new zsync client
    */
   public Zsync() {
-    this(newHttpClient());
+    this(ZsyncClient.newZsyncClient());
   }
 
-  /**
-   * Creates a new zsync client that reuses a clone of the given http client.
-   *
-   * @param okHttpClient
-   */
-  public Zsync(OkHttpClient okHttpClient) {
-    this(newHttpClient(okHttpClient));
-  }
 
-  /* currently internal as HttpClient not exposed */
-  private Zsync(HttpClient httpClient) {
-    this.httpClient = httpClient;
+
+  /* currently internal as ZsyncClient not exposed */
+  private Zsync(ZsyncClient zsyncClient) {
+    this.zsyncClient = zsyncClient;
   }
 
   /**
@@ -322,7 +303,7 @@ public class Zsync {
 
   private Path zsyncInternal(URI zsyncFile, Options options, EventDispatcher events) throws ZsyncException {
     final ControlFile controlFile;
-    try (InputStream in = this.openZsyncFile(zsyncFile, this.httpClient, options, events)) {
+    try (InputStream in = this.openZsyncFile(zsyncFile, this.zsyncClient, options, events)) {
       controlFile = ControlFile.read(in);
     } catch (HttpError e) {
       if (e.getCode() == HTTP_NOT_FOUND) {
@@ -331,7 +312,7 @@ public class Zsync {
       throw new ZsyncException("Unexpected Http error retrieving zsync file", e);
     } catch (NoSuchFileException e) {
       throw new ZsyncControlFileNotFoundException("Zsync file " + zsyncFile + " does not exist.", e);
-    } catch (IOException e) {
+    } catch (IOException | InterruptedException e) {
       throw new ZsyncException("Failed to read zsync control file", e);
     }
 
@@ -359,12 +340,12 @@ public class Zsync {
     try (final OutputFileWriter outputFileWriter =
         new OutputFileWriter(outputFile, controlFile, events.getOutputFileWriteListener())) {
       if (!this.processInputFiles(outputFileWriter, controlFile, options.getInputFiles(), events)) {
-        this.httpClient.partialGet(remoteFileUri, outputFileWriter.getMissingRanges(), options.getCredentials(),
+        this.zsyncClient.partialGet(remoteFileUri, outputFileWriter.getMissingRanges(), options.getCredentials(),
             events.getRangeReceiverListener(outputFileWriter), events.getRemoteFileDownloadListener());
       }
     } catch (ChecksumValidationIOException exception) {
       throw new ZsyncChecksumValidationFailedException("Calculated checksum does not match expected checksum");
-    } catch (IOException | HttpError e) {
+    } catch (IOException | HttpError | InterruptedException e) {
       throw new ZsyncException(e);
     }
 
@@ -381,15 +362,15 @@ public class Zsync {
    * parameter, so that relative file URLs in the control file can later be resolved against it.
    *
    * @param zsyncFile
-   * @param httpClient
+   * @param zsyncClient
    * @param options
    *
    * @return
    * @throws IOException
    * @throws HttpError
    */
-  private InputStream openZsyncFile(URI zsyncFile, HttpClient httpClient, Options options, EventDispatcher events)
-      throws IOException, HttpError {
+  private InputStream openZsyncFile(URI zsyncFile, ZsyncClient zsyncClient, Options options, EventDispatcher events)
+      throws IOException, HttpError, InterruptedException {
     final InputStream in;
     if (zsyncFile.isAbsolute()) {
       // check if it's a local URI
@@ -402,9 +383,9 @@ public class Zsync {
         // check if we should persist the file locally
         final Path savePath = options.getSaveZsyncFile();
         if (savePath == null) {
-          in = httpClient.get(zsyncFile, credentials, listener);
+          in = zsyncClient.get(zsyncFile, credentials, listener);
         } else {
-          httpClient.get(zsyncFile, savePath, credentials, listener);
+          zsyncClient.get(zsyncFile, savePath, credentials, listener);
           in = this.openZsyncFile(savePath, events);
         }
       } else {
@@ -504,7 +485,7 @@ public class Zsync {
     }
     final URI uri = URI.create(args[args.length - 1]);
 
-    final Zsync zsync = new Zsync(new OkHttpClient());
+    final Zsync zsync = new Zsync(newZsyncClient());
     final ZsyncStatsObserver observer = new ZsyncStatsObserver();
     zsync.zsync(uri, options, observer);
     final ZsyncStats stats = observer.build();

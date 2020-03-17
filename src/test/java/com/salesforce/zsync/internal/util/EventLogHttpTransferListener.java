@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2015, Salesforce.com, Inc. All rights reserved.
+ * Copyright (c) 2020, Bitshift (bitshifted.co), Inc. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without modification, are permitted
  * provided that the following conditions are met:
@@ -27,12 +28,12 @@ package com.salesforce.zsync.internal.util;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.salesforce.zsync.internal.util.HttpClient.HttpTransferListener;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.Response;
+import com.salesforce.zsync.internal.util.ZsyncClient.HttpTransferListener;
 
 /**
  * A test utility class for recording listener events so that tests can assert the sequence of
@@ -51,9 +52,9 @@ class EventLogHttpTransferListener implements HttpTransferListener {
   }
 
   static class Initialized implements EventLogHttpTransferListener.Event {
-    private final Request request;
+    private final HttpRequest request;
 
-    public Initialized(Request request) {
+    public Initialized(HttpRequest request) {
       super();
       this.request = request;
     }
@@ -81,7 +82,7 @@ class EventLogHttpTransferListener implements HttpTransferListener {
       return equals(this.request, other.request);
     }
 
-    private boolean equals(Request r1, Request r2) {
+    private boolean equals(HttpRequest r1, HttpRequest r2) {
       if (r1 == null && r2 == null) {
         return true;
       }
@@ -89,8 +90,8 @@ class EventLogHttpTransferListener implements HttpTransferListener {
         return false;
       }
       try {
-        return r1.urlString().equals(r2.urlString()) && r1.uri().equals(r2.uri()) && r1.url().equals(r2.url())
-            && r1.method().equals(r2.method()) && r1.headers().names().equals(r2.headers().names());
+        return r1.uri().toString().equals(r2.uri().toString()) && r1.uri().equals(r2.uri()) && r1.uri().toURL().equals(r2.uri().toURL())
+            && r1.method().equals(r2.method()) && r1.headers().map().keySet().equals(r2.headers().map().keySet());
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -197,17 +198,14 @@ class EventLogHttpTransferListener implements HttpTransferListener {
   }
 
   @Override
-  public void initiating(Request request) {
+  public void initiating(HttpRequest request) {
     this.eventLog.add(new Initialized(request));
   }
 
   @Override
-  public void start(Response response, long totalBytes) {
-    try {
+  public void start(HttpResponse response, long totalBytes) {
       this.eventLog.add(new Started(response.request().uri(), totalBytes));
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+
   }
 
   @Override

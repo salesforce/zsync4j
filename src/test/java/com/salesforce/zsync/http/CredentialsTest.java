@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2015, Salesforce.com, Inc. All rights reserved.
+ * Copyright (c) 2020, Bitshift (bitshifted.co), Inc. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without modification, are permitted
  * provided that the following conditions are met:
@@ -25,11 +26,11 @@
  */
 package com.salesforce.zsync.http;
 
-import static org.junit.Assert.assertEquals;
-
 import org.junit.Test;
 
-import com.salesforce.zsync.http.Credentials;
+import java.util.Base64;
+
+import static org.junit.Assert.assertEquals;
 
 public class CredentialsTest {
 
@@ -45,7 +46,7 @@ public class CredentialsTest {
 
   @Test
   public void testBasic() {
-    assertEquals(com.squareup.okhttp.Credentials.basic("jdoe", "secret"), new Credentials("jdoe", "secret").basic());
+    assertEquals(Base64.getEncoder().encodeToString("jdoe:secret".getBytes()), new Credentials("jdoe", "secret").basic());
   }
 
 }

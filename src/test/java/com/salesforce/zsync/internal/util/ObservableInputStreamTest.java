@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2015, Salesforce.com, Inc. All rights reserved.
+ * Copyright (c) 2020, Bitshift (bitshifted.co), Inc. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without modification, are permitted
  * provided that the following conditions are met:
@@ -25,28 +26,21 @@
  */
 package com.salesforce.zsync.internal.util;
 
-import static com.google.common.collect.ImmutableList.of;
-import static com.squareup.okhttp.Protocol.HTTP_1_1;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
+import com.salesforce.zsync.internal.util.EventLogHttpTransferListener.Closed;
+import com.salesforce.zsync.internal.util.EventLogHttpTransferListener.Started;
+import com.salesforce.zsync.internal.util.EventLogHttpTransferListener.Transferred;
+import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
-import org.junit.Test;
-
-import com.salesforce.zsync.internal.util.ObservableInputStream;
-import com.salesforce.zsync.internal.util.EventLogHttpTransferListener.Closed;
-import com.salesforce.zsync.internal.util.EventLogHttpTransferListener.Started;
-import com.salesforce.zsync.internal.util.EventLogHttpTransferListener.Transferred;
-import com.salesforce.zsync.internal.util.ObservableInputStream.ObservableResourceInputStream;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.Response;
+import static com.google.common.collect.ImmutableList.of;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 public class ObservableInputStreamTest {
 
@@ -109,11 +103,13 @@ public class ObservableInputStreamTest {
   public void testStarted() throws IOException {
     EventLogHttpTransferListener listener = new EventLogHttpTransferListener();
     final URI uri = URI.create("http://host/path");
-    final Response response =
-        new Response.Builder().request(new Request.Builder().url(uri.toURL()).build()).protocol(HTTP_1_1).code(200)
-            .build();
+
+    HttpResponse<byte[]> mockResponse = mock(HttpResponse.class);
+    HttpRequest request = HttpRequest.newBuilder(uri).build();
+    when(mockResponse.request()).thenReturn(request);
+
     InputStream in =
-        new ObservableResourceInputStream<Response>(new ByteArrayInputStream(new byte[0]), listener, response, 1l);
+        new ObservableInputStream.ObservableResourceInputStream<HttpResponse<byte[]>>(new ByteArrayInputStream(new byte[0]), listener, mockResponse, 1l);
     in.close();
     assertEquals(of(new Started(uri, 1l), Closed.INSTANCE), listener.getEventLog());
   }
