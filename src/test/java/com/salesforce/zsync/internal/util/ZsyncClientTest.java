@@ -175,16 +175,16 @@ public class ZsyncClientTest {
 //  @Test
 //  public void runtimeExceptionThrownForIoExceptionDuringHttpCommunication() throws Exception {
 //    // Arrange
-//    OkHttpClient mockHttpClient = mock(OkHttpClient.class);
+//    HttpClient mockHttpClient = mock(HttpClient.class);
 //    RangeReceiver mockReceiver = mock(RangeReceiver.class);
 //    RangeTransferListener listener = mock(RangeTransferListener.class);
 //    when(listener.newTransfer(any(List.class))).thenReturn(mock(HttpTransferListener.class));
 //    List<ContentRange> ranges = this.createSomeRanges(1);
 //    URI url = new URI("http://host/someurl");
 //    IOException expected = new IOException("IO");
-//    Call mockCall = mock(Call.class);
-//    when(mockCall.execute()).thenThrow(expected);
-//    when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
+////    Call mockCall = mock(Call.class);
+////    when(mockCall.execute()).thenThrow(expected);
+////    when(mockHttpClient.newCall(any(Request.class))).thenReturn(mockCall);
 //
 //    // Act
 //    try {

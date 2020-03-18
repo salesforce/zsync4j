@@ -38,6 +38,8 @@ import java.util.Optional;
 import java.util.function.BiPredicate;
 
 /**
+ * Dummy response class used in tests.
+ *
  * @author Vladimir Djurovic
  */
 public class DummyResponse implements HttpResponse {
